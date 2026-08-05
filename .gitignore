@@ -1,0 +1,22 @@
+.DS_Store
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+*.zip
+
+# Local data snapshots. The 35,789-record HTS payload and raw Federal Register text must never
+# enter the app source path: no single app file may exceed 10 MB or deployment fails. Snapshots
+# belong in a Delta table or a volume, written by the ingest job. Parser test fixtures are a
+# separate, deliberately tracked thing and live in tests/fixtures/.
+data/
+
+# macOS AppleDouble sidecars. MUST stay last. The drive is exFAT, so macOS writes a
+# `._name.ext` sibling for every file — including inside .git/objects/pack/, where git parses
+# `._pack-*.idx` as a pack index and prints `error: non-monotonic index` on clone. That error is
+# noise, not corruption; clear it with `find . -name '._*' -delete`.
+._*
