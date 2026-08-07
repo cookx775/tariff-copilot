@@ -24,14 +24,35 @@ This record contains no credentials, tokens, database passwords, or personal con
 | Forwarded actor and explicit local fallback | PASS | `tests/test_identity.py` |
 | App-owned schema and repository read/write seams | PASS | `tests/test_repository.py` |
 | Workflow facade and validation | PASS | `tests/test_workflow.py` |
-| Deployed shell write/read after reload | BLOCKED | No Databricks CLI, local auth profile, or attached app resource was available in the implementation environment |
+| Deployed shell write/read after reload | PASS | `tariff-copilot`, deployment `01f1928bfcf818f1b090874c7eeae8f6`, live smoke on 2026-08-07 |
 
-The final row is intentionally not marked complete until the deployed check is run against the
-Databricks account. No deployment result is claimed by this commit.
+## Completed deployed smoke
+
+- App URL: <https://tariff-copilot-7474657586545240.aws.databricksapps.com>
+- Deployment: final successful snapshot `01f1928bfcf818f1b090874c7eeae8f6`
+- Deployment result: `SUCCEEDED` — app started successfully.
+- The live shell rendered the persistent public/synthetic/model-generated disclosure and an
+  empty Policy Inbox.
+- Databricks forwarded actor identity rendered in the application.
+- Diagnostic `Ticket 8 deployed foundation smoke check.` was written through the UI and remained
+  visible after a full browser reload; the Foundation diagnostics count changed from 0 to 1.
+
+## Platform friction
+
+- The installed CLI's OAuth profile was only usable when commands could access the macOS secure
+  credential store; sandboxed CLI calls reported the profile invalid even after login.
+- `apps deploy --source-code-path` requires a Databricks workspace path, not a local filesystem
+  path. The clean source subset was uploaded to a redacted user workspace path before deployment.
+- A newly created app must be started before its first deployment; provisioning took several
+  minutes before compute reached `ACTIVE`.
+- Reattaching the Lakebase resource created a new app role while the existing `tariff` tables and
+  indexes retained their prior ownership. The app role received only the required schema/table/
+  sequence access, and initialization was hardened to skip indexes that already exist; the final
+  redeploy then passed the live read/write/reload check.
 
 ## Local verification run
 
 ```text
-21 passed
+22 passed
 ruff check (changed Python files): passed
 ```

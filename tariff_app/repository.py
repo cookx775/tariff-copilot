@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +12,7 @@ NOTICE_COLUMNS = (
     "notice_id, source_identifier, title, agency, canonical_url, publication_date, "
     "retrieved_at, content_sha256, is_featured"
 )
+INDEX_NAME_PATTERN = re.compile(r"^CREATE INDEX IF NOT EXISTS ([A-Za-z0-9_]+)", re.IGNORECASE)
 
 
 def load_schema_statements(path: Path = SCHEMA_PATH) -> list[str]:
@@ -25,7 +27,15 @@ class TariffRepository:
     def initialize(self) -> None:
         with self._pool.connection() as connection, connection.cursor() as cursor:
             for statement in load_schema_statements():
+                index_match = INDEX_NAME_PATTERN.match(statement)
+                if index_match and self._index_exists(cursor, index_match.group(1)):
+                    continue
                 cursor.execute(statement)
+
+    def _index_exists(self, cursor: Any, index_name: str) -> bool:
+        cursor.execute("SELECT to_regclass(%s) AS index_name", (f"tariff.{index_name}",))
+        row = cursor.fetchone()
+        return bool(row and row["index_name"])
 
     def record_diagnostic(self, *, actor_email: str, message: str) -> DiagnosticRecord:
         row = self._fetchone(

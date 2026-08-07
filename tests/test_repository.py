@@ -69,7 +69,7 @@ def notice_row(notice_id=7):
 
 
 def test_initialize_creates_the_dedicated_schema_and_foundation_tables():
-    cursor = FakeCursor()
+    cursor = FakeCursor([None, None])
     repository = TariffRepository(FakePool(cursor))
 
     repository.initialize()
@@ -78,6 +78,24 @@ def test_initialize_creates_the_dedicated_schema_and_foundation_tables():
     assert "CREATE SCHEMA IF NOT EXISTS tariff" in sql
     assert "CREATE TABLE IF NOT EXISTS tariff.app_diagnostics" in sql
     assert "CREATE TABLE IF NOT EXISTS tariff.policy_notice_snapshots" in sql
+
+
+def test_initialize_skips_existing_indexes_when_table_ownership_is_reused():
+    cursor = FakeCursor(
+        [
+            {"index_name": "tariff.app_diagnostics_created_idx"},
+            {"index_name": "tariff.policy_notice_snapshots_published_idx"},
+        ]
+    )
+    repository = TariffRepository(FakePool(cursor))
+
+    repository.initialize()
+
+    sql = "\n".join(query for query, _params in cursor.executions)
+    assert "CREATE INDEX IF NOT EXISTS" not in sql
+    assert ("tariff.app_diagnostics_created_idx",) in [
+        params for query, params in cursor.executions if "to_regclass" in query
+    ]
 
 
 def test_record_diagnostic_is_parameterized_and_returns_a_domain_record():
