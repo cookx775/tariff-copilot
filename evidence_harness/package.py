@@ -17,7 +17,6 @@ DEFAULT_REQUIRED_ARTIFACTS = (
     "tariff_app/",
     "tariff_app/retrieval.py",
     "tariff_app/agent.py",
-    "tariff_app/seed.py",
     "tests/",
     "README.md",
     "evidence/evidence-manifest.json",
@@ -66,6 +65,7 @@ SECRET_PATTERNS = (
 @dataclass(frozen=True)
 class PackagePolicy:
     required_artifacts: tuple[str, ...] = DEFAULT_REQUIRED_ARTIFACTS
+    require_seed_loader: bool = True
     max_file_bytes: int = 10 * 1024 * 1024
     allowed_email_domains: tuple[str, ...] = (
         "example.com",
@@ -142,6 +142,17 @@ def _iter_files(root: Path, policy: PackagePolicy) -> Iterable[Path]:
             yield path
 
 
+def _has_seed_loader(root: Path) -> bool:
+    candidates = [root / "tariff_app" / "seed.py", root / "tariff_app" / "repository.py"]
+    for path in candidates:
+        if not path.is_file():
+            continue
+        content = path.read_text(errors="ignore")
+        if "seed_demonstration_scenario" in content or "load_demonstration_scenario" in content:
+            return True
+    return False
+
+
 def _scan_file(path: Path, root: Path, policy: PackagePolicy) -> tuple[bool, bool]:
     path.relative_to(root).as_posix()
     if path.name == ".env" or path.name.startswith(".env."):
@@ -184,6 +195,8 @@ def validate_submission_tree(
     missing = tuple(
         artifact for artifact in policy.required_artifacts if not _artifact_present(root, artifact)
     )
+    if policy.require_seed_loader and not _has_seed_loader(root):
+        missing = (*missing, "seed/loading path")
     oversized: list[str] = []
     forbidden: list[str] = []
     secret: list[str] = []

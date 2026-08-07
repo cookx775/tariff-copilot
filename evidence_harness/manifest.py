@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from .runs import verify_run_file
 
@@ -136,9 +139,34 @@ def _fixture_errors(path: Path) -> list[str]:
         fixture = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return ["invalid fixture"]
+    if not isinstance(fixture, dict):
+        return ["invalid fixture object"]
     if str(fixture.get("fixture_status", "")).startswith("pending-"):
         return ["placeholder fixture"]
-    return [f"missing {field}" for field in SNAPSHOT_FIELDS if not fixture.get(field)]
+    errors = [
+        f"missing {field}"
+        for field in SNAPSHOT_FIELDS
+        if field not in fixture or (field != "effective_date" and not fixture.get(field))
+    ]
+    canonical_url = urlparse(str(fixture.get("canonical_url", "")))
+    if canonical_url.scheme not in {"http", "https"} or not canonical_url.netloc:
+        errors.append("invalid canonical_url")
+    if fixture.get("content_sha256") and not re.fullmatch(
+        r"[0-9a-fA-F]{64}", str(fixture["content_sha256"])
+    ):
+        errors.append("invalid content_sha256")
+    for field, parser in (
+        ("publication_date", date.fromisoformat),
+        ("effective_date", date.fromisoformat),
+        ("retrieved_at", datetime.fromisoformat),
+    ):
+        value = fixture.get(field)
+        if value:
+            try:
+                parser(str(value).replace("Z", "+00:00"))
+            except ValueError:
+                errors.append(f"invalid {field}")
+    return errors
 
 
 def _validated_artifact(root: Path, artifact: str, match: str) -> str | None:
@@ -149,6 +177,18 @@ def _validated_artifact(root: Path, artifact: str, match: str) -> str | None:
     if artifact.startswith("evidence/runs/") and not verify_run_file(path).ok:
         return f"{match} (invalid run record)"
     return None
+
+
+def _is_image_file(path: Path) -> bool:
+    try:
+        header = path.read_bytes()[:12]
+    except OSError:
+        return False
+    return (
+        header.startswith((b"\x89PNG\r\n\x1a\n", b"\xff\xd8\xff"))
+        or header.startswith(b"RIFF")
+        and header[8:12] == b"WEBP"
+    )
 
 
 def _requirement_manifest(root: Path, requirement: EvidenceRequirement) -> dict[str, Any]:
@@ -201,7 +241,8 @@ def _release_evidence_manifest(root: Path) -> list[dict[str, Any]]:
                 validation_error = _validated_artifact(root, artifact, match)
             elif key == "deployed_url":
                 try:
-                    valid_url = path.read_text().strip().startswith("https://")
+                    parsed_url = urlparse(path.read_text().strip())
+                    valid_url = parsed_url.scheme == "https" and bool(parsed_url.netloc)
                 except OSError:
                     valid_url = False
                 validation_error = None if valid_url else f"{match} (invalid deployed URL)"
@@ -215,7 +256,9 @@ def _release_evidence_manifest(root: Path) -> list[dict[str, Any]]:
                 valid_extensions = {".png", ".jpg", ".jpeg", ".webp"}
                 if path.is_dir():
                     has_image = any(
-                        candidate.is_file() and candidate.suffix.lower() in valid_extensions
+                        candidate.is_file()
+                        and candidate.suffix.lower() in valid_extensions
+                        and _is_image_file(candidate)
                         for candidate in path.rglob("*")
                     )
                     validation_error = None if has_image else f"{match} (no screenshots)"

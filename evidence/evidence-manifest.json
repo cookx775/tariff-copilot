@@ -1,8 +1,8 @@
 {
   "missing_evidence": [
     {"missing_artifacts": ["jobs/*.py", "evidence/runs/spark-ingest.json"], "requirement": "spark_pipeline"},
-    {"missing_artifacts": ["evidence/fixtures/featured_policy_notice_snapshot.json", "evidence/runs/federal-register.json"], "requirement": "third_party_api"},
-    {"missing_artifacts": ["tariff_app/retrieval.py", "evidence/fixtures/featured_policy_notice_snapshot.json", "evidence/runs/semantic-retrieval.json"], "requirement": "unstructured_retrieval"},
+    {"missing_artifacts": ["evidence/fixtures/featured_policy_notice_snapshot.json", "evidence/runs/federal-register.json", "evidence/fixtures/featured_policy_notice_snapshot.json (placeholder fixture)"], "requirement": "third_party_api"},
+    {"missing_artifacts": ["tariff_app/retrieval.py", "evidence/fixtures/featured_policy_notice_snapshot.json", "evidence/runs/semantic-retrieval.json", "evidence/fixtures/featured_policy_notice_snapshot.json (placeholder fixture)"], "requirement": "unstructured_retrieval"},
     {"missing_artifacts": ["evidence/deployed-url.txt", "evidence/runs/deployed-app.json"], "requirement": "deployed_frontend"},
     {"missing_artifacts": ["tariff_app/agent.py", "evidence/runs/agent-write.json"], "requirement": "agent_retrieval_and_write"},
     {"missing_artifacts": ["evidence/screenshots/"], "requirement": "release:screenshots"},

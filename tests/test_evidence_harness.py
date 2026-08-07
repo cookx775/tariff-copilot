@@ -117,6 +117,22 @@ def test_manifest_does_not_verify_placeholders_or_invalid_run_records(tmp_path: 
     assert "evidence/fixtures/featured.json (placeholder fixture)" in entry["invalid_artifacts"]
     assert "evidence/runs/federal-register.json (invalid run record)" in entry["invalid_artifacts"]
 
+    malformed = tmp_path / "evidence" / "fixtures" / "malformed.json"
+    malformed.write_text("[]\n")
+    malformed_requirement = EvidenceRequirement(
+        key="malformed",
+        name="Malformed fixture",
+        required_artifacts=("evidence/fixtures/malformed.json",),
+        verification_steps=("Inspect the fixture.",),
+    )
+    malformed_entry = build_evidence_manifest(tmp_path, requirements=(malformed_requirement,))[
+        "requirements"
+    ][0]
+    assert (
+        "evidence/fixtures/malformed.json (invalid fixture object)"
+        in malformed_entry["invalid_artifacts"]
+    )
+
 
 def test_release_manifest_validates_run_url_screenshot_and_test_contents(tmp_path: Path):
     run = tmp_path / "evidence" / "runs" / "successful.json"
@@ -192,7 +208,9 @@ def test_injected_dependencies_can_be_passed_to_a_workflow_factory():
 
 def test_packaging_is_deterministic_and_scans_content(tmp_path: Path):
     (tmp_path / "README.md").write_text("safe\n")
-    policy = PackagePolicy(required_artifacts=("README.md",), max_file_bytes=100)
+    policy = PackagePolicy(
+        required_artifacts=("README.md",), max_file_bytes=100, require_seed_loader=False
+    )
 
     report = validate_submission_tree(tmp_path, policy=policy)
     assert report.ok
@@ -212,7 +230,7 @@ def test_packaging_rejects_secrets_and_personal_contact_addresses(tmp_path: Path
     with pytest.raises(SecretScanError) as error:
         validate_submission_tree(
             tmp_path,
-            policy=PackagePolicy(required_artifacts=("README.md",)),
+            policy=PackagePolicy(required_artifacts=("README.md",), require_seed_loader=False),
         )
 
     assert "README.md" in str(error.value)
@@ -222,14 +240,14 @@ def test_packaging_rejects_secrets_and_personal_contact_addresses(tmp_path: Path
     with pytest.raises(SecretScanError):
         validate_submission_tree(
             tmp_path,
-            policy=PackagePolicy(required_artifacts=("README.md",)),
+            policy=PackagePolicy(required_artifacts=("README.md",), require_seed_loader=False),
         )
 
     (tmp_path / "run.sh").write_text("tok" + "en = 'abc123'\n")
     with pytest.raises(SecretScanError):
         validate_submission_tree(
             tmp_path,
-            policy=PackagePolicy(required_artifacts=("README.md",)),
+            policy=PackagePolicy(required_artifacts=("README.md",), require_seed_loader=False),
         )
 
 
@@ -240,7 +258,9 @@ def test_packaging_reports_fixture_placeholders_as_unverified(tmp_path: Path):
 
     report = validate_submission_tree(
         tmp_path,
-        policy=PackagePolicy(required_artifacts=("evidence/fixtures/notice.json",)),
+        policy=PackagePolicy(
+            required_artifacts=("evidence/fixtures/notice.json",), require_seed_loader=False
+        ),
     )
 
     assert not report.ok
@@ -252,7 +272,9 @@ def test_packaging_does_not_treat_an_empty_screenshot_directory_as_evidence(tmp_
 
     report = validate_submission_tree(
         tmp_path,
-        policy=PackagePolicy(required_artifacts=("evidence/screenshots/",)),
+        policy=PackagePolicy(
+            required_artifacts=("evidence/screenshots/",), require_seed_loader=False
+        ),
     )
 
     assert report.missing_artifacts == ("evidence/screenshots/",)
@@ -262,7 +284,9 @@ def test_packaging_rejects_oversized_files_and_env_files(tmp_path: Path):
     (tmp_path / "README.md").write_text("x" * 101)
     report = validate_submission_tree(
         tmp_path,
-        policy=PackagePolicy(required_artifacts=("README.md",), max_file_bytes=100),
+        policy=PackagePolicy(
+            required_artifacts=("README.md",), max_file_bytes=100, require_seed_loader=False
+        ),
     )
     assert report.oversized_files == ("README.md",)
 
@@ -270,8 +294,28 @@ def test_packaging_rejects_oversized_files_and_env_files(tmp_path: Path):
     with pytest.raises(SecretScanError):
         validate_submission_tree(
             tmp_path,
-            policy=PackagePolicy(required_artifacts=("README.md",), max_file_bytes=200),
+            policy=PackagePolicy(
+                required_artifacts=("README.md",), max_file_bytes=200, require_seed_loader=False
+            ),
         )
+
+
+def test_default_package_policy_requires_a_real_seed_loader(tmp_path: Path):
+    (tmp_path / "README.md").write_text("safe\n")
+    report = validate_submission_tree(
+        tmp_path,
+        policy=PackagePolicy(required_artifacts=("README.md",), require_seed_loader=True),
+    )
+    assert "seed/loading path" in report.missing_artifacts
+
+    repository = tmp_path / "tariff_app" / "repository.py"
+    repository.parent.mkdir()
+    repository.write_text("def seed_demonstration_scenario(repository):\n    pass\n")
+    report = validate_submission_tree(
+        tmp_path,
+        policy=PackagePolicy(required_artifacts=("README.md",), require_seed_loader=True),
+    )
+    assert "seed/loading path" not in report.missing_artifacts
 
 
 def test_repository_readme_and_smoke_checklist_are_explicit_skeletons():
