@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tariff Copilot development roadmap</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --ink: light-dark(#16221d, #edf6f1);
+      --muted: light-dark(#66756e, #9eb0a7);
+      --surface: light-dark(#ffffff, #15221d);
+      --surface-soft: light-dark(#f3f7f4, #1b2b24);
+      --page: light-dark(#eef3ef, #0c1511);
+      --line: light-dark(#d6e0da, #30433a);
+      --green: light-dark(#0d6b50, #59c39d);
+      --green-soft: light-dark(#e4f2ec, #183d30);
+      --gold: light-dark(#9b690d, #e7bc61);
+      --gold-soft: light-dark(#fff5d9, #3a3019);
+      --blue: light-dark(#315f8c, #76acd9);
+      --blue-soft: light-dark(#eaf2f9, #1c3042);
+      --red: light-dark(#a1443a, #ed8f82);
+      --red-soft: light-dark(#fff0ed, #40221f);
+      --shadow: 0 16px 50px light-dark(rgba(25, 50, 39, .10), rgba(0, 0, 0, .28));
+    }
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"] { color-scheme: dark; }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--page);
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    button, a { font: inherit; }
+    a { color: var(--green); }
+    .shell { max-width: 1500px; margin: 0 auto; padding: 28px; }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 28px;
+      align-items: end;
+      padding: 30px;
+      border-radius: 22px;
+      color: #f4fbf7;
+      background: linear-gradient(125deg, #102820 0%, #1a4d3a 70%, #7c682f 150%);
+      box-shadow: var(--shadow);
+    }
+    .eyebrow { margin: 0 0 8px; color: #e7bc61; font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { max-width: 850px; margin: 0; font: 700 clamp(30px, 4.2vw, 54px)/1.02 Georgia, serif; letter-spacing: -.035em; }
+    .subtitle { max-width: 820px; margin: 12px 0 0; color: #d5e4dd; font-size: 16px; }
+    .hero-meta { display: grid; grid-template-columns: repeat(2, minmax(105px, 1fr)); gap: 1px; overflow: hidden; min-width: 280px; border-radius: 14px; background: rgba(255,255,255,.2); }
+    .hero-metric { padding: 15px; background: rgba(8, 27, 20, .48); }
+    .hero-metric strong { display: block; color: #fff; font-size: 24px; letter-spacing: -.03em; }
+    .hero-metric span { color: #c8d9d1; font-size: 11px; }
+
+    .status-strip { display: flex; flex-wrap: wrap; gap: 9px; margin: 18px 0; }
+    .status-item { padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--surface); font-size: 12px; }
+    .status-item strong { color: var(--ink); }
+    .status-item.frontier { border-color: color-mix(in srgb, var(--green) 45%, var(--line)); color: var(--green); background: var(--green-soft); }
+
+    .roadmap-panel { overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 3px 16px light-dark(rgba(25, 50, 39, .05), rgba(0,0,0,.15)); }
+    .roadmap-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+    .roadmap-head h2, .detail h2, .cuts h2 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+    .roadmap-head p { margin: 3px 0 0; color: var(--muted); font-size: 12px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 13px; color: var(--muted); font-size: 11px; }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .legend i { width: 11px; height: 11px; border-radius: 3px; background: var(--surface-soft); border: 1px solid var(--line); }
+    .legend .frontier-key { background: var(--green-soft); border-color: var(--green); }
+    .legend .critical-key { background: var(--gold-soft); border-color: var(--gold); }
+    .legend .closed-key { background: var(--blue-soft); border-color: var(--blue); }
+
+    .parallel-banner { padding: 10px 20px; color: var(--blue); background: var(--blue-soft); font-size: 12px; }
+    .parallel-banner strong { color: var(--ink); }
+
+    .timeline-board { position: relative; min-width: 900px; }
+    .timeline-grid { display: grid; grid-template-columns: 184px minmax(0, 1fr); position: relative; }
+    .axis-corner { min-height: 66px; border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+    .axis-track { position: relative; min-height: 66px; border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+    .axis-tick { position: absolute; bottom: 9px; transform: translateX(-50%); color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .axis-tick::before { content: ""; position: absolute; left: 50%; bottom: 18px; width: 1px; height: 7px; background: var(--line); }
+    .lane-label { display: flex; align-items: center; min-height: 92px; padding: 12px 18px; border-bottom: 1px solid var(--line); color: var(--muted); background: var(--surface-soft); font-size: 12px; font-weight: 700; }
+    .lane-track { position: relative; min-height: 92px; border-bottom: 1px solid var(--line); background-image: linear-gradient(to right, color-mix(in srgb, var(--line) 55%, transparent) 1px, transparent 1px); background-size: calc(100% / 5) 100%; }
+    .gate-line { position: absolute; top: 0; bottom: 0; z-index: 1; width: 1px; background: color-mix(in srgb, var(--gold) 60%, transparent); pointer-events: none; }
+    .gate-line.freeze { background: color-mix(in srgb, var(--red) 65%, transparent); }
+    .gate-line.deadline { width: 2px; background: var(--red); }
+    .gate-label { position: absolute; top: 4px; z-index: 5; max-width: 102px; transform: translateX(-50%); color: var(--gold); font-size: 9px; line-height: 1.15; text-align: center; }
+    .gate-label.freeze, .gate-label.deadline { color: var(--red); }
+
+    .ticket-bar { position: absolute; top: 23px; z-index: 4; min-width: 42px; height: 48px; overflow: hidden; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px; color: var(--ink); background: var(--surface-soft); text-align: left; cursor: pointer; box-shadow: 0 3px 8px light-dark(rgba(20,45,34,.07), rgba(0,0,0,.16)); }
+    .ticket-bar:hover, .ticket-bar:focus-visible { z-index: 7; border-color: var(--green); outline: 2px solid color-mix(in srgb, var(--green) 28%, transparent); outline-offset: 1px; }
+    .ticket-bar.is-selected { z-index: 8; border-color: var(--green); background: var(--green-soft); }
+    .ticket-bar.is-frontier { border-color: var(--green); background: var(--green-soft); }
+    .ticket-bar.is-critical:not(.is-frontier) { border-color: var(--gold); background: var(--gold-soft); }
+    .ticket-bar.is-closed { border-color: var(--blue); background: var(--blue-soft); opacity: .78; }
+    .ticket-top { display: flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 800; }
+    .ticket-title { display: block; overflow: hidden; margin-top: 3px; font-size: 11px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+    .ticket-bar.compact .ticket-title { display: none; }
+    .model-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--blue); }
+    .model-dot.luna { background: var(--green); }
+    .model-dot.terra { background: var(--gold); }
+    .model-dot.sol { background: var(--red); }
+    #connections { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    .dependency { fill: none; stroke: color-mix(in srgb, var(--muted) 55%, transparent); stroke-width: 1.2; }
+    .dependency.critical { stroke: var(--gold); stroke-width: 2; }
+
+    .mobile-gates { display: none; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .mobile-gates strong { display: block; margin-bottom: 7px; }
+    .mobile-gates div { padding: 5px 0; color: var(--muted); font-size: 12px; }
+
+    .detail { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr); gap: 22px; margin-top: 18px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+    .detail-kicker { margin: 0 0 5px; color: var(--green); font-size: 11px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+    .detail-summary { margin: 11px 0 0; color: var(--muted); }
+    .detail-link { display: inline-block; margin-top: 13px; font-weight: 750; text-decoration: none; }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .detail-item { padding: 11px; border-radius: 10px; background: var(--surface-soft); }
+    .detail-item span { display: block; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+    .detail-item strong { display: block; margin-top: 3px; font-size: 12px; }
+    .dependency-links { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+    .dependency-links button { padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--green); background: transparent; cursor: pointer; }
+
+    .cuts { margin-top: 18px; padding: 22px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); }
+    .cuts > p { margin: 6px 0 16px; color: var(--muted); }
+    .cut-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; counter-reset: cut; }
+    .cut { position: relative; min-height: 82px; padding: 12px 12px 12px 42px; border-top: 2px solid var(--red); background: var(--red-soft); font-size: 12px; counter-increment: cut; }
+    .cut::before { content: counter(cut); position: absolute; left: 12px; top: 11px; display: grid; place-items: center; width: 21px; height: 21px; border-radius: 50%; color: var(--surface); background: var(--red); font-size: 11px; font-weight: 800; }
+    footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 16px 2px 0; color: var(--muted); font-size: 11px; }
+
+    @media (max-width: 980px) {
+      .hero { grid-template-columns: 1fr; }
+      .hero-meta { max-width: 420px; }
+      .cut-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .timeline-scroll { overflow-x: auto; }
+    }
+    @media (max-width: 720px) {
+      .shell { padding: 14px; }
+      .hero { padding: 22px; }
+      .hero-meta { min-width: 0; width: 100%; }
+      .timeline-scroll { overflow: visible; }
+      .timeline-board { min-width: 0; }
+      .axis-corner, .axis-track, #connections { display: none; }
+      .timeline-grid { display: block; }
+      .lane-label { min-height: 0; padding: 13px 15px 7px; border-bottom: 0; color: var(--ink); }
+      .lane-track { display: grid; gap: 7px; min-height: 0; padding: 0 14px 14px; background: var(--surface-soft); }
+      .ticket-bar { position: relative; inset: auto !important; width: 100% !important; min-width: 0; height: auto; min-height: 50px; }
+      .ticket-bar.compact .ticket-title { display: block; }
+      .gate-line, .gate-label { display: none; }
+      .mobile-gates { display: block; }
+      .detail { grid-template-columns: 1fr; }
+      .cut-list { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">Execution control · Friday → Sunday</p>
+        <h1>Tariff Copilot development roadmap</h1>
+        <p class="subtitle">Nine dependency-linked tracer bullets turn the scoped product into a deployed, evidence-backed submission without obscuring the critical path or contingency cuts.</p>
+      </div>
+      <div class="hero-meta" aria-label="Roadmap summary">
+        <div class="hero-metric"><strong id="ticket-count">9</strong><span>implementation tickets</span></div>
+        <div class="hero-metric"><strong id="frontier-count">1</strong><span>ready now</span></div>
+        <div class="hero-metric"><strong id="luna-count">6</strong><span>Luna xhigh</span></div>
+        <div class="hero-metric"><strong id="terra-count">3</strong><span>Terra xhigh</span></div>
+      </div>
+    </section>
+
+    <div class="status-strip" id="status-strip" aria-label="Roadmap status"></div>
+
+    <section class="roadmap-panel" aria-labelledby="timeline-title">
+      <div class="roadmap-head">
+        <div><h2 id="timeline-title">Dependency waterfall</h2><p>Click a ticket to inspect its scope, blockers, target gate, and implementer model.</p></div>
+        <div class="legend" aria-label="Legend">
+          <span><i class="frontier-key"></i> Current frontier</span>
+          <span><i class="critical-key"></i> Critical path</span>
+          <span><i class="closed-key"></i> Complete</span>
+        </div>
+      </div>
+      <div class="parallel-banner" id="parallel-banner"></div>
+      <div class="mobile-gates" id="mobile-gates"><strong>Integration gates</strong></div>
+      <div class="timeline-scroll">
+        <div class="timeline-board" id="timeline-board">
+          <div class="timeline-grid" id="timeline-grid">
+            <div class="axis-corner"></div><div class="axis-track" id="axis-track"></div>
+          </div>
+          <svg id="connections" aria-hidden="true"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"></path></marker></defs></svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="detail" id="detail" aria-live="polite">
+      <div>
+        <p class="detail-kicker" id="detail-kicker"></p>
+        <h2 id="detail-title"></h2>
+        <p class="detail-summary" id="detail-summary"></p>
+        <a class="detail-link" id="detail-link" target="_blank" rel="noreferrer">Open GitHub ticket →</a>
+        <div class="dependency-links" id="dependency-links"></div>
+      </div>
+      <div class="detail-grid" id="detail-grid"></div>
+    </section>
+
+    <section class="cuts">
+      <h2>Contingency ladder</h2>
+      <p>Apply only when an integration gate slips. Mandatory requirements remain outside the ladder.</p>
+      <div class="cut-list" id="cut-list"></div>
+    </section>
+
+    <footer>
+      <span id="generated"></span>
+      <a id="spec-link" target="_blank" rel="noreferrer">Canonical implementation spec</a>
+    </footer>
+  </main>
+
+  <script id="roadmap-data" type="application/json">{"repository":"cookx775/tariff-copilot","spec":{"number":7,"title":"Build the Tariff & Trade-Policy Exposure Copilot","url":"https://github.com/cookx775/tariff-copilot/issues/7"},"generated_at":"2026-08-07T17:11:50.700113+00:00","timezone":"America/Chicago","lanes":["Platform/deployment","Spark/data","Retrieval/agent","Domain/repository/tests","Frontend","Documentation/demo readiness"],"gates":[{"label":"Friday platform verification","at":"2026-08-07T18:30:00-05:00","kind":"gate"},{"label":"Saturday integrated slice","at":"2026-08-08T23:00:00-05:00","kind":"gate"},{"label":"Sunday complete frontend","at":"2026-08-09T12:00:00-05:00","kind":"gate"},{"label":"Feature freeze","at":"2026-08-09T13:00:00-05:00","kind":"freeze"},{"label":"Internal submission target","at":"2026-08-09T20:00:00-05:00","kind":"target"},{"label":"Official deadline · 10 PM PT","at":"2026-08-10T00:00:00-05:00","kind":"deadline"}],"contingency_cuts":["Remove the negative notice from the live demo; retain its automated test.","Remove simulated-failure UI controls; retain real failure handling and tests.","Collapse expanded Analysis & Action History; retain persisted audit events.","Remove the read-only Sourcing Reviews index; retain direct Review detail.","Use generated confirmation defaults instead of editable objective and owner.","Remove live USITC ingestion and broad notice coverage; retain pinned classifications and one live Federal Register path.","Remove successor-analysis UI; retain immutable snapshot records."],"tickets":[{"number":8,"sequence":1,"title":"Prove the deployed Lakebase application foundation","url":"https://github.com/cookx775/tariff-copilot/issues/8","state":"open","assignees":[],"labels":["ready-for-agent"],"lane":"Platform/deployment","target_start":"2026-08-07T12:00:00-05:00","target_end":"2026-08-07T18:30:00-05:00","gate":"Friday platform verification","contingency":"Never cut","model":"gpt-5.6-luna","reasoning_effort":"xhigh","prior_art":"Homework 1 Lakebase OAuth pool, repository initialization, forwarded identity, Streamlit startup test","parallel_safe_with":"None; this establishes the shared contracts for the first parallel frontier","summary":"Deliver the smallest deployed Tariff Copilot path that proves the public repository, Streamlit application, Databricks App resource, dedicated Lakebase schema, rotating OAuth credentials, authenticated actor, workflow facade, and durable database access work together. The Strategic Sourcing Manager sees the persistent illustrative-scenario disclosure and an empty or seeded Policy Inbox shell; a diagnostic record written through the application remains readable after reload.","blockers":[],"dependents":[9,10,14]},{"number":9,"sequence":2,"title":"Make policy evidence searchable from the Policy Inbox","url":"https://github.com/cookx775/tariff-copilot/issues/9","state":"open","assignees":[],"labels":["ready-for-agent"],"lane":"Spark/data","target_start":"2026-08-07T21:00:00-05:00","target_end":"2026-08-08T17:30:00-05:00","gate":"Saturday-evening integrated slice","contingency":"Never cut","model":"gpt-5.6-terra","reasoning_effort":"xhigh","prior_art":"Homework 2 injectable jobs, direct PostgreSQL vector upserts, content hashes, lazy embeddings, HNSW cosine retrieval, schema verifier","parallel_safe_with":"Load and disclose the Demonstration Scenario; Build the scoring-evidence harness","summary":"Deliver one complete policy-evidence path: a Git-sourced Spark task fetches at least one live Federal Register API response, persists an immutable Policy Notice Snapshot, normalizes hard-wrapped body text, extracts HTS references, creates policy-aware chunks, produces 1024-dimensional embeddings, and makes the evidence semantically searchable through pgvector. The resulting notice appears in the Current Policy Inbox and remains after reload.","blockers":[8],"dependents":[11,15]},{"number":10,"sequence":3,"title":"Load and disclose the Demonstration Scenario","url":"https://github.com/cookx775/tariff-copilot/issues/10","state":"open","assignees":[],"labels":["ready-for-agent"],"lane":"Domain/repository/tests","target_start":"2026-08-07T21:00:00-05:00","target_end":"2026-08-08T15:00:00-05:00","gate":"Saturday-evening integrated slice","contingency":"Never cut","model":"gpt-5.6-luna","reasoning_effort":"xhigh","prior_art":"Homework 1 repository boundaries and idempotent seed locking, adapted to immutable versioned capstone records","parallel_safe_with":"Make policy evidence searchable from the Policy Inbox; Build the scoring-evidence harness","summary":"Deliver the versioned enterprise context that makes exposure analysis possible without misrepresenting modeled data. Load the agreed Public Enterprise Backbone, five Components, six BOM Relationships, six Supply Relationships, fictional Suppliers, countries of origin, Annual Spend, and Classification Assertions. Make this context available through the bounded Retrieve Exposure Context operation and render the persistent disclosure that separates public Mueller Water Products facts, public policy/HTS evidence, synthetic procurement data, and model-generated analysis.","blockers":[8],"dependents":[11]},{"number":11,"sequence":4,"title":"Generate the featured evidence-backed Impact Outlook","url":"https://github.com/cookx775/tariff-copilot/issues/11","state":"open","assignees":[],"labels":["ready-for-agent"],"lane":"Retrieval/agent","target_start":"2026-08-08T17:30:00-05:00","target_end":"2026-08-08T20:30:00-05:00","gate":"Saturday-evening integrated slice","contingency":"Never cut","model":"gpt-5.6-terra","reasoning_effort":"xhigh","prior_art":"Homework 2 semantic retrieval seam plus the frozen A+C Impact Outlook prototype","parallel_safe_with":"None; this integrates the first parallel frontier","summary":"Deliver the primary decision path from the Featured Demonstration Notice to one immutable, persisted Impact Outlook Snapshot. The workflow facade invokes only the three bounded read tools, retrieves the exact Section 301 evidence and Demonstration Scenario context, deterministically calculates exposure, validates constrained model output, and renders the executive brief, decision metrics, product-line Impact Findings, Evidence Bundles, uncertainty, and full-width Recommended Actions.","blockers":[9,10],"dependents":[12,13]},{"number":12,"sequence":5,"title":"Open a confirmed Sourcing Review","url":"https://github.com/cookx775/tariff-copilot/issues/12","state":"open","assignees":[],"labels":["ready-for-agent"],"lane":"Retrieval/agent","target_start":"2026-08-08T20:30:00-05:00","target_end":"2026-08-08T23:00:00-05:00","gate":"Saturday-evening integrated slice","contingency":"Never cut","model":"gpt-5.6-terra","reasoning_effort":"xhigh","prior_art":"Homework 1 durable write and actor identity patterns, strengthened by the Wayfinder confirmation and audit contract","parallel_safe_with":"Prove negative, validation, and failure-safe analysis","summary":"Deliver the agent's one real operational write. From one stored Recommended Action on a Complete Impact Outlook Snapshot, present the exact review payload, require an explicit server-valid confirmation, create one durable idempotent Sourcing Review with its fixed evidence scope, append the Agent Run outcome, and navigate directly to Review detail.","blockers":[11],"dependents":[15,16]},{"number":13,"sequence":6,"title":"Prove negative, validation, and failure-safe analysis","url":"https://github.com/cookx775/tariff-copilot/issues/13","state":"open","assignees":[],"labels":["ready-for-agent"],"lane":"Domain/repository/tests","target_start":"2026-08-08T20:30:00-05:00","target_end":"2026-08-08T23:00:00-05:00","gate":"Saturday-evening integrated slice","contingency":"Core behavior and tests never cut; negative live-demo coda is cut 1 and simulated failure controls are cut 2","model":"gpt-5.6-luna","reasoning_effort":"xhigh","prior_art":"Homework 2 empty-result, partial-upstream-failure, stale-content, and deterministic job tests","parallel_safe_with":"Open a confirmed Sourcing Review","summary":"Deliver the non-happy paths that make the Impact Outlook trustworthy. Analyze the pinned L-Lysine notice through the same workflow and produce No Actionable Exposure Identified. Preserve useful conditional recommendations for validation cases, exclude unsupported findings, and ensure required retrieval, fingerprint, generated-output, or persistence failures create Failed processing without a partial Outlook. Reanalysis creates a linked successor.","blockers":[11],"dependents":[15,16]},{"number":14,"sequence":7,"title":"Build the scoring-evidence harness","url":"https://github.com/cookx775/tariff-copilot/issues/14","state":"open","assignees":[],"labels":["ready-for-agent"],"lane":"Documentation/demo readiness","target_start":"2026-08-07T21:00:00-05:00","target_end":"2026-08-08T14:00:00-05:00","gate":"Saturday-evening integrated slice","contingency":"Never cut","model":"gpt-5.6-luna","reasoning_effort":"xhigh","prior_art":"Homework 1 configuration/repository/AppTest suite and Homework 2 job/retrieval/schema/grading evidence","parallel_safe_with":"Make policy evidence searchable from the Policy Inbox; Load and disclose the Demonstration Scenario","summary":"Deliver an executable evidence and packaging harness that makes every mandatory course requirement easy to verify while feature work proceeds. Establish focused test fixtures and adapters, schema/run verification, the five-requirement evidence manifest, deployment smoke checklist, README structure, deterministic ZIP assembly checks, and secret scanning. The harness may begin with expected placeholders but must fail visibly rather than claim evidence that does not exist.","blockers":[8],"dependents":[16]},{"number":15,"sequence":8,"title":"Complete the five-minute sourcing-manager journey","url":"https://github.com/cookx775/tariff-copilot/issues/15","state":"open","assignees":[],"labels":["ready-for-agent"],"lane":"Frontend","target_start":"2026-08-09T08:00:00-05:00","target_end":"2026-08-09T12:00:00-05:00","gate":"Sunday-midday complete frontend","contingency":"Baseline required; optional subfeatures follow cuts 1 through 5","model":"gpt-5.6-luna","reasoning_effort":"xhigh","prior_art":"Frozen prototype Variant A structure with Variant C executive-impact treatment","parallel_safe_with":"None; integrates the complete user journey","summary":"Deliver the complete polished Strategic Sourcing Manager journey in Streamlit using the frozen guided-workflow prototype as the interaction source and its executive-narrative treatment as the Outlook hierarchy. The user can move from the disclosed featured-versus-live Policy Inbox through evidence and full-width Recommended Actions, explicitly confirm a Sourcing Review, land on durable Review detail, and reopen it from the lightweight index.","blockers":[9,12,13],"dependents":[16]},{"number":16,"sequence":9,"title":"Release the deployed submission package","url":"https://github.com/cookx775/tariff-copilot/issues/16","state":"open","assignees":[],"labels":["ready-for-agent"],"lane":"Documentation/demo readiness","target_start":"2026-08-09T12:00:00-05:00","target_end":"2026-08-09T20:00:00-05:00","gate":"Sunday-afternoon feature freeze and release","contingency":"Never cut","model":"gpt-5.6-luna","reasoning_effort":"xhigh","prior_art":"Homework 2's successful grading evidence and deterministic submission ZIP discipline","parallel_safe_with":"None; final integration and release","summary":"Deliver the upload-ready capstone release after feature freeze. Integrate the completed workflow, run the focused test and evidence harness, deploy from the default branch, verify the five-minute path and persistence, capture required evidence, finalize the README, and build the mandatory secret-free submission ZIP. Stop adding features after the Sunday-afternoon gate; only test, evidence, deployment, packaging, and rehearsal fixes remain.","blockers":[12,13,14,15],"dependents":[]}],"frontier":[8],"critical_path":[8,9,11,12,15,16],"parallel_fronts":[[9,10,14],[12,13]],"timeline":{"start":"2026-08-07T12:00:00-05:00","end":"2026-08-10T00:00:00-05:00"},"model_policy":{"default":"Use the ticket's recommended model and reasoning effort.","luna_to_terra":"Escalate only for unresolved cross-system behavior, architectural misunderstanding, or repeated contract violations.","terra_to_sol":"Escalate only when evidence-driven debugging cannot isolate a platform or integration failure."}}</script>
+  <script>
+    (() => {
+      const requestedTheme = new URLSearchParams(location.search).get('theme');
+      if (requestedTheme === 'light' || requestedTheme === 'dark') document.documentElement.dataset.theme = requestedTheme;
+      const data = JSON.parse(document.getElementById('roadmap-data').textContent);
+      const byNumber = new Map(data.tickets.map(ticket => [ticket.number, ticket]));
+      const critical = new Set(data.critical_path);
+      const frontier = new Set(data.frontier);
+      const startMs = Date.parse(data.timeline.start);
+      const endMs = Date.parse(data.timeline.end);
+      const durationMs = endMs - startMs;
+      let selected = data.frontier[0] || data.tickets[0].number;
+
+      const percent = value => Math.max(0, Math.min(100, ((Date.parse(value) - startMs) / durationMs) * 100));
+      const shortDate = value => new Intl.DateTimeFormat('en-US', { weekday: 'short', hour: 'numeric', timeZone: 'America/Chicago' }).format(new Date(value));
+      const fullDate = value => new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Chicago', timeZoneName: 'short' }).format(new Date(value));
+      const modelName = model => model.replace('gpt-5.6-', '').replace(/^./, char => char.toUpperCase());
+
+      document.getElementById('ticket-count').textContent = data.tickets.length;
+      document.getElementById('frontier-count').textContent = data.frontier.length;
+      document.getElementById('luna-count').textContent = data.tickets.filter(ticket => ticket.model.endsWith('luna')).length;
+      document.getElementById('terra-count').textContent = data.tickets.filter(ticket => ticket.model.endsWith('terra')).length;
+      document.getElementById('spec-link').href = data.spec.url;
+      document.getElementById('generated').textContent = `Snapshot generated ${fullDate(data.generated_at)}`;
+
+      const statusStrip = document.getElementById('status-strip');
+      const statusItems = [
+        [`Frontier ${data.frontier.map(number => `#${number}`).join(' + ')}`, true],
+        [`Critical path ${data.critical_path.map(number => `#${number}`).join(' → ')}`, false],
+        [`Internal target ${fullDate(data.gates.find(gate => gate.kind === 'target').at)}`, false],
+        [`Official deadline ${fullDate(data.gates.find(gate => gate.kind === 'deadline').at)}`, false],
+      ];
+      statusItems.forEach(([text, isFrontier]) => {
+        const item = document.createElement('span');
+        item.className = `status-item${isFrontier ? ' frontier' : ''}`;
+        item.textContent = text;
+        statusStrip.appendChild(item);
+      });
+
+      const parallelText = data.parallel_fronts.map((group, index) => `Front ${String.fromCharCode(65 + index)}: ${group.map(number => `#${number}`).join(' + ')}`).join(' · ');
+      document.getElementById('parallel-banner').innerHTML = `<strong>Parallel execution:</strong> ${parallelText}`;
+
+      const axis = document.getElementById('axis-track');
+      for (let cursor = startMs; cursor <= endMs; cursor += 12 * 60 * 60 * 1000) {
+        const tick = document.createElement('span');
+        tick.className = 'axis-tick';
+        tick.style.left = `${((cursor - startMs) / durationMs) * 100}%`;
+        tick.textContent = shortDate(new Date(cursor).toISOString());
+        axis.appendChild(tick);
+      }
+
+      const grid = document.getElementById('timeline-grid');
+      data.lanes.forEach(lane => {
+        const label = document.createElement('div');
+        label.className = 'lane-label';
+        label.textContent = lane;
+        const track = document.createElement('div');
+        track.className = 'lane-track';
+        track.dataset.lane = lane;
+        grid.append(label, track);
+      });
+
+      const tracks = new Map([...document.querySelectorAll('.lane-track')].map(track => [track.dataset.lane, track]));
+      data.gates.forEach((gate, index) => {
+        tracks.forEach(track => {
+          const line = document.createElement('span');
+          line.className = `gate-line ${gate.kind}`;
+          line.style.left = `${percent(gate.at)}%`;
+          line.title = `${gate.label}: ${fullDate(gate.at)}`;
+          track.appendChild(line);
+        });
+
+        const label = document.createElement('span');
+        label.className = `gate-label ${gate.kind}`;
+        label.style.left = `${percent(gate.at)}%`;
+        label.style.top = `${4 + (index % 2) * 22}px`;
+        if (percent(gate.at) > 94) label.style.transform = 'translateX(-100%)';
+        label.textContent = gate.kind === 'deadline' ? 'Official deadline' : gate.label;
+        label.title = `${gate.label}: ${fullDate(gate.at)}`;
+        axis.appendChild(label);
+
+        const mobile = document.createElement('div');
+        mobile.textContent = `${gate.label} · ${fullDate(gate.at)}`;
+        document.getElementById('mobile-gates').appendChild(mobile);
+      });
+
+      data.tickets.forEach(ticket => {
+        const button = document.createElement('button');
+        const width = Math.max(4.2, percent(ticket.target_end) - percent(ticket.target_start));
+        const classes = ['ticket-bar'];
+        if (width < 8) classes.push('compact');
+        if (frontier.has(ticket.number)) classes.push('is-frontier');
+        if (critical.has(ticket.number)) classes.push('is-critical');
+        if (ticket.state === 'closed') classes.push('is-closed');
+        button.className = classes.join(' ');
+        button.style.left = `${percent(ticket.target_start)}%`;
+        button.style.width = `${width}%`;
+        button.dataset.issue = ticket.number;
+        button.title = `#${ticket.number} ${ticket.title} · ${modelName(ticket.model)} ${ticket.reasoning_effort}`;
+        button.setAttribute('aria-label', button.title);
+
+        const top = document.createElement('span');
+        top.className = 'ticket-top';
+        const dot = document.createElement('i');
+        dot.className = `model-dot ${ticket.model.split('-').at(-1)}`;
+        const number = document.createElement('span');
+        number.textContent = `#${ticket.number}`;
+        top.append(dot, number);
+        if (frontier.has(ticket.number)) {
+          const ready = document.createElement('span');
+          ready.textContent = 'READY';
+          top.appendChild(ready);
+        }
+        const title = document.createElement('span');
+        title.className = 'ticket-title';
+        title.textContent = ticket.title;
+        button.append(top, title);
+        button.addEventListener('click', () => selectTicket(ticket.number));
+        tracks.get(ticket.lane).appendChild(button);
+      });
+
+      function selectTicket(number) {
+        selected = number;
+        document.querySelectorAll('.ticket-bar').forEach(button => button.classList.toggle('is-selected', Number(button.dataset.issue) === number));
+        const ticket = byNumber.get(number);
+        const state = frontier.has(number) ? 'Current frontier' : ticket.state === 'closed' ? 'Complete' : 'Blocked or queued';
+        document.getElementById('detail-kicker').textContent = `#${number} · ${ticket.lane} · ${state}`;
+        document.getElementById('detail-title').textContent = ticket.title;
+        document.getElementById('detail-summary').textContent = ticket.summary;
+        document.getElementById('detail-link').href = ticket.url;
+
+        const details = [
+          ['Target window', `${fullDate(ticket.target_start)} → ${fullDate(ticket.target_end)}`],
+          ['Implementer', `${modelName(ticket.model)} · ${ticket.reasoning_effort}`],
+          ['Integration gate', ticket.gate],
+          ['Contingency', ticket.contingency],
+          ['Assignee', ticket.assignees.join(', ') || 'Unassigned'],
+          ['Prior art', ticket.prior_art || 'None recorded'],
+        ];
+        const detailGrid = document.getElementById('detail-grid');
+        detailGrid.replaceChildren();
+        details.forEach(([label, value]) => {
+          const item = document.createElement('div');
+          item.className = 'detail-item';
+          const caption = document.createElement('span');
+          caption.textContent = label;
+          const content = document.createElement('strong');
+          content.textContent = value;
+          item.append(caption, content);
+          detailGrid.appendChild(item);
+        });
+
+        const links = document.getElementById('dependency-links');
+        links.replaceChildren();
+        const related = [
+          ...ticket.blockers.map(value => ['Blocked by', value]),
+          ...ticket.dependents.map(value => ['Unlocks', value]),
+        ];
+        related.forEach(([kind, value]) => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = `${kind} #${value}`;
+          button.addEventListener('click', () => selectTicket(value));
+          links.appendChild(button);
+        });
+        if (!related.length) {
+          const text = document.createElement('span');
+          text.className = 'status-item frontier';
+          text.textContent = 'No blockers · can start immediately';
+          links.appendChild(text);
+        }
+      }
+
+      const cutList = document.getElementById('cut-list');
+      data.contingency_cuts.forEach(text => {
+        const cut = document.createElement('div');
+        cut.className = 'cut';
+        cut.textContent = text;
+        cutList.appendChild(cut);
+      });
+
+      function drawConnections() {
+        const svg = document.getElementById('connections');
+        [...svg.querySelectorAll('path.dependency')].forEach(path => path.remove());
+        if (window.matchMedia('(max-width: 720px)').matches) return;
+        const boardRect = document.getElementById('timeline-board').getBoundingClientRect();
+        const criticalEdges = new Set(data.critical_path.slice(0, -1).map((number, index) => `${number}-${data.critical_path[index + 1]}`));
+        data.tickets.forEach(ticket => ticket.blockers.forEach(blocker => {
+          const from = document.querySelector(`[data-issue="${blocker}"]`).getBoundingClientRect();
+          const to = document.querySelector(`[data-issue="${ticket.number}"]`).getBoundingClientRect();
+          const x1 = from.right - boardRect.left;
+          const y1 = from.top + from.height / 2 - boardRect.top;
+          const x2 = to.left - boardRect.left;
+          const y2 = to.top + to.height / 2 - boardRect.top;
+          const bend = Math.max(x1 + 10, x1 + (x2 - x1) / 2);
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', `M ${x1} ${y1} H ${bend} V ${y2} H ${x2}`);
+          path.setAttribute('class', `dependency${criticalEdges.has(`${blocker}-${ticket.number}`) ? ' critical' : ''}`);
+          svg.appendChild(path);
+        }));
+      }
+
+      selectTicket(selected);
+      requestAnimationFrame(drawConnections);
+      new ResizeObserver(drawConnections).observe(document.getElementById('timeline-board'));
+    })();
+  </script>
+</body>
+</html>
