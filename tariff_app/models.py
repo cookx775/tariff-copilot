@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Optional
 
 
@@ -50,3 +51,74 @@ class PolicyNoticeSnapshot:
             content_sha256=row["content_sha256"],
             is_featured=row["is_featured"],
         )
+
+
+@dataclass(frozen=True)
+class ProvenanceRecord:
+    label: str
+    source_name: str
+    source_url: Optional[str]
+    source_citation: str
+
+
+@dataclass(frozen=True)
+class ScenarioSeedSummary:
+    scenario_version: str
+    segment_count: int
+    product_line_count: int
+    component_count: int
+    bom_relationship_count: int
+    supplier_count: int
+    supply_relationship_count: int
+    country_count: int
+    classification_assertion_count: int
+    annual_spend: Decimal
+
+
+@dataclass(frozen=True)
+class ScenarioComponent:
+    component_key: str
+    name: str
+    provenance: ProvenanceRecord
+
+
+@dataclass(frozen=True)
+class ProductLineContext:
+    product_line_key: str
+    name: str
+    segment_name: str
+    provenance: ProvenanceRecord
+
+
+@dataclass(frozen=True)
+class SupplyRelationshipContext:
+    supply_relationship_key: str
+    supplier_key: str
+    supplier_name: str
+    origin_code: str
+    origin_name: str
+    annual_spend: Decimal
+    measurement_period: str
+    provenance: ProvenanceRecord
+
+
+@dataclass(frozen=True)
+class ClassificationAssertionContext:
+    classification_key: str
+    sourced_variant: str
+    jurisdiction: str
+    schedule_period: str
+    hts_code: str
+    state: str
+    provenance: ProvenanceRecord
+
+
+@dataclass(frozen=True)
+class ExposureContext:
+    scenario_version: str
+    component_key: str
+    component_name: str
+    component_provenance: ProvenanceRecord
+    product_lines: tuple[ProductLineContext, ...]
+    supply_relationships: tuple[SupplyRelationshipContext, ...]
+    classification_assertions: tuple[ClassificationAssertionContext, ...]

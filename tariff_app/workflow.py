@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
-from .models import DiagnosticRecord, PolicyNoticeSnapshot
+from .models import DiagnosticRecord, ExposureContext, PolicyNoticeSnapshot, ScenarioComponent
 
 
 def _validated_message(message: str) -> str:
@@ -26,6 +27,12 @@ class TariffWorkflow:
 
     def policy_inbox(self) -> list[PolicyNoticeSnapshot]:
         return self._repository.list_policy_notices()
+
+    def scenario_components(self) -> list[ScenarioComponent]:
+        return self._repository.list_scenario_components()
+
+    def retrieve_exposure_context(self, component_keys: Sequence[str]) -> list[ExposureContext]:
+        return self._repository.retrieve_exposure_context(component_keys)
 
     def record_diagnostic(self, message: str) -> DiagnosticRecord:
         return self._repository.record_diagnostic(

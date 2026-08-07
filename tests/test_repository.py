@@ -69,7 +69,7 @@ def notice_row(notice_id=7):
 
 
 def test_initialize_creates_the_dedicated_schema_and_foundation_tables():
-    cursor = FakeCursor([None, None])
+    cursor = FakeCursor([None] * 5)
     repository = TariffRepository(FakePool(cursor))
 
     repository.initialize()
@@ -85,6 +85,9 @@ def test_initialize_skips_existing_indexes_when_table_ownership_is_reused():
         [
             {"index_name": "tariff.app_diagnostics_created_idx"},
             {"index_name": "tariff.policy_notice_snapshots_published_idx"},
+            {"index_name": "tariff.scenario_components_key_idx"},
+            {"index_name": "tariff.scenario_supply_component_idx"},
+            {"index_name": "tariff.scenario_classifications_component_idx"},
         ]
     )
     repository = TariffRepository(FakePool(cursor))

@@ -6,7 +6,7 @@ import os
 
 import streamlit as st
 
-from tariff_app.app_content import DISCLOSURE_COPY
+from tariff_app.app_content import DISCLOSURE_COPY, DISCLOSURE_DETAILS
 from tariff_app.db import DatabaseConfigurationError, get_connection_pool
 from tariff_app.identity import IdentityError, actor_email, forwarded_email
 from tariff_app.repository import TariffRepository
@@ -99,6 +99,79 @@ def render_diagnostics(workflow: TariffWorkflow) -> None:
         )
 
 
+def render_exposure_context(workflow: TariffWorkflow) -> None:
+    components = workflow.scenario_components()
+    if not components:
+        st.info("The Demonstration Scenario has no Components available yet.")
+        return
+
+    labels = {
+        f"{component.name} ({component.component_key})": component.component_key
+        for component in components
+    }
+    selected_label = st.selectbox("Component", list(labels), key="scenario_component")
+    contexts = workflow.retrieve_exposure_context([labels[selected_label]])
+    if not contexts:
+        st.warning("No bounded exposure context was found for the selected Component.")
+        return
+
+    context = contexts[0]
+    st.caption(
+        f"Component provenance: {context.component_provenance.label}. "
+        "All supplier, origin, spend, BOM, and classification records below are Synthetic "
+        "Demonstration Scenario data."
+    )
+    st.markdown("**Public Enterprise Backbone**")
+    st.dataframe(
+        [
+            {
+                "Segment (Public source)": product_line.segment_name,
+                "Product line (Public source)": product_line.name,
+                "Provenance": product_line.provenance.source_citation,
+            }
+            for product_line in context.product_lines
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+    st.markdown("**Supply Relationships**")
+    st.dataframe(
+        [
+            {
+                "Supplier (Synthetic)": relationship.supplier_name,
+                "Origin (Synthetic)": relationship.origin_name,
+                "Annual Spend (Synthetic)": f"${relationship.annual_spend:,.0f}",
+                "Measurement period": relationship.measurement_period,
+                "Relationship": relationship.supply_relationship_key,
+            }
+            for relationship in context.supply_relationships
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+    st.caption(
+        "Annual Spend is stored once per unique Supply Relationship. A shared Component can "
+        "appear under multiple product lines without copying this spend."
+    )
+
+    st.markdown("**Classification Assertions (Synthetic)**")
+    st.dataframe(
+        [
+            {
+                "State": assertion.state,
+                "Sourced variant": assertion.sourced_variant,
+                "Jurisdiction": assertion.jurisdiction,
+                "Schedule period": assertion.schedule_period,
+                "HTS code": assertion.hts_code,
+            }
+            for assertion in context.classification_assertions
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
 def run_app() -> None:
     try:
         repo = repository()
@@ -144,7 +217,8 @@ def run_app() -> None:
         """,
         unsafe_allow_html=True,
     )
-    st.info(DISCLOSURE_COPY)
+    with st.expander(DISCLOSURE_COPY, expanded=False):
+        st.markdown(DISCLOSURE_DETAILS)
     st.caption(f"Signed-in actor: {actor}")
 
     notices = workflow.policy_inbox()
@@ -170,6 +244,14 @@ def run_app() -> None:
         )
     else:
         st.info("The Policy Inbox is ready for the first Federal Register notice.")
+
+
+    st.markdown("### Demonstration Scenario")
+    st.caption(
+        "Retrieve only the selected Component's bounded product-line, supplier, origin, "
+        "classification, spend, and provenance context."
+    )
+    render_exposure_context(workflow)
 
     st.markdown("### Lakebase foundation check")
     st.caption(

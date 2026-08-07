@@ -15,9 +15,10 @@ def test_app_shows_safe_configuration_help_when_lakebase_is_not_attached(monkeyp
     assert "Attach the Lakebase resource" in app.info[0].value
 
 
-def test_disclosure_copy_names_public_synthetic_and_model_generated_inputs():
-    from tariff_app.app_content import DISCLOSURE_COPY
+def test_disclosure_contract_distinguishes_public_synthetic_and_model_generated_inputs():
+    from tariff_app.app_content import DISCLOSURE_COPY, DISCLOSURE_DETAILS
 
     assert "public" in DISCLOSURE_COPY.lower()
     assert "synthetic" in DISCLOSURE_COPY.lower()
-    assert "model-generated" in DISCLOSURE_COPY.lower()
+    assert "model-generated" in DISCLOSURE_DETAILS.lower()
+    assert "historical replay" in DISCLOSURE_DETAILS.lower()

@@ -23,5 +23,145 @@ CREATE TABLE IF NOT EXISTS tariff.policy_notice_snapshots (
     UNIQUE (source_identifier, content_sha256)
 );
 
+
 CREATE INDEX IF NOT EXISTS policy_notice_snapshots_published_idx
     ON tariff.policy_notice_snapshots(publication_date DESC, notice_id DESC);
+
+CREATE TABLE IF NOT EXISTS tariff.scenario_versions (
+    scenario_version VARCHAR(64) PRIMARY KEY,
+    scenario_name VARCHAR(300) NOT NULL,
+    measurement_period VARCHAR(100) NOT NULL,
+    provenance_label VARCHAR(100) NOT NULL,
+    source_citation TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS tariff.enterprise_segments (
+    scenario_version VARCHAR(64) NOT NULL,
+    segment_key VARCHAR(100) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    provenance_label VARCHAR(100) NOT NULL,
+    source_name VARCHAR(300) NOT NULL,
+    source_url TEXT,
+    source_citation TEXT NOT NULL,
+    PRIMARY KEY (scenario_version, segment_key),
+    FOREIGN KEY (scenario_version) REFERENCES tariff.scenario_versions(scenario_version)
+);
+
+CREATE TABLE IF NOT EXISTS tariff.product_lines (
+    scenario_version VARCHAR(64) NOT NULL,
+    product_line_key VARCHAR(100) NOT NULL,
+    segment_key VARCHAR(100) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    provenance_label VARCHAR(100) NOT NULL,
+    source_name VARCHAR(300) NOT NULL,
+    source_url TEXT,
+    source_citation TEXT NOT NULL,
+    PRIMARY KEY (scenario_version, product_line_key),
+    FOREIGN KEY (scenario_version, segment_key)
+        REFERENCES tariff.enterprise_segments(scenario_version, segment_key)
+);
+
+CREATE TABLE IF NOT EXISTS tariff.components (
+    scenario_version VARCHAR(64) NOT NULL,
+    component_key VARCHAR(100) NOT NULL,
+    name VARCHAR(300) NOT NULL,
+    provenance_label VARCHAR(100) NOT NULL,
+    source_name VARCHAR(300) NOT NULL,
+    source_url TEXT,
+    source_citation TEXT NOT NULL,
+    PRIMARY KEY (scenario_version, component_key),
+    FOREIGN KEY (scenario_version) REFERENCES tariff.scenario_versions(scenario_version)
+);
+
+CREATE TABLE IF NOT EXISTS tariff.bom_relationships (
+    scenario_version VARCHAR(64) NOT NULL,
+    product_line_key VARCHAR(100) NOT NULL,
+    component_key VARCHAR(100) NOT NULL,
+    provenance_label VARCHAR(100) NOT NULL,
+    source_name VARCHAR(300) NOT NULL,
+    source_url TEXT,
+    source_citation TEXT NOT NULL,
+    PRIMARY KEY (scenario_version, product_line_key, component_key),
+    FOREIGN KEY (scenario_version, product_line_key)
+        REFERENCES tariff.product_lines(scenario_version, product_line_key),
+    FOREIGN KEY (scenario_version, component_key)
+        REFERENCES tariff.components(scenario_version, component_key)
+);
+
+CREATE TABLE IF NOT EXISTS tariff.suppliers (
+    scenario_version VARCHAR(64) NOT NULL,
+    supplier_key VARCHAR(100) NOT NULL,
+    name VARCHAR(300) NOT NULL,
+    is_fictional BOOLEAN NOT NULL,
+    provenance_label VARCHAR(100) NOT NULL,
+    source_name VARCHAR(300) NOT NULL,
+    source_url TEXT,
+    source_citation TEXT NOT NULL,
+    PRIMARY KEY (scenario_version, supplier_key),
+    FOREIGN KEY (scenario_version) REFERENCES tariff.scenario_versions(scenario_version)
+);
+
+CREATE TABLE IF NOT EXISTS tariff.countries_of_origin (
+    scenario_version VARCHAR(64) NOT NULL,
+    country_code CHAR(2) NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    provenance_label VARCHAR(100) NOT NULL,
+    source_name VARCHAR(300) NOT NULL,
+    source_url TEXT,
+    source_citation TEXT NOT NULL,
+    PRIMARY KEY (scenario_version, country_code),
+    FOREIGN KEY (scenario_version) REFERENCES tariff.scenario_versions(scenario_version)
+);
+
+CREATE TABLE IF NOT EXISTS tariff.supply_relationships (
+    scenario_version VARCHAR(64) NOT NULL,
+    supply_relationship_key VARCHAR(120) NOT NULL,
+    component_key VARCHAR(100) NOT NULL,
+    supplier_key VARCHAR(100) NOT NULL,
+    country_code CHAR(2) NOT NULL,
+    annual_spend NUMERIC(14, 2) NOT NULL CHECK (annual_spend >= 0),
+    measurement_period VARCHAR(100) NOT NULL,
+    provenance_label VARCHAR(100) NOT NULL,
+    source_name VARCHAR(300) NOT NULL,
+    source_url TEXT,
+    source_citation TEXT NOT NULL,
+    PRIMARY KEY (scenario_version, supply_relationship_key),
+    UNIQUE (scenario_version, component_key, supplier_key, country_code, measurement_period),
+    FOREIGN KEY (scenario_version, component_key)
+        REFERENCES tariff.components(scenario_version, component_key),
+    FOREIGN KEY (scenario_version, supplier_key)
+        REFERENCES tariff.suppliers(scenario_version, supplier_key),
+    FOREIGN KEY (scenario_version, country_code)
+        REFERENCES tariff.countries_of_origin(scenario_version, country_code)
+);
+
+CREATE TABLE IF NOT EXISTS tariff.classification_assertions (
+    scenario_version VARCHAR(64) NOT NULL,
+    classification_key VARCHAR(140) NOT NULL,
+    component_key VARCHAR(100) NOT NULL,
+    supply_relationship_key VARCHAR(120) NOT NULL,
+    sourced_variant VARCHAR(160) NOT NULL,
+    jurisdiction VARCHAR(50) NOT NULL,
+    schedule_period VARCHAR(50) NOT NULL,
+    hts_code VARCHAR(30) NOT NULL,
+    state VARCHAR(20) NOT NULL CHECK (state IN ('validated', 'candidate', 'superseded')),
+    provenance_label VARCHAR(100) NOT NULL,
+    source_name VARCHAR(300) NOT NULL,
+    source_url TEXT,
+    source_citation TEXT NOT NULL,
+    PRIMARY KEY (scenario_version, classification_key),
+    FOREIGN KEY (scenario_version, component_key)
+        REFERENCES tariff.components(scenario_version, component_key),
+    FOREIGN KEY (scenario_version, supply_relationship_key)
+        REFERENCES tariff.supply_relationships(scenario_version, supply_relationship_key)
+);
+
+CREATE INDEX IF NOT EXISTS scenario_components_key_idx
+    ON tariff.components(scenario_version, component_key);
+
+CREATE INDEX IF NOT EXISTS scenario_supply_component_idx
+    ON tariff.supply_relationships(scenario_version, component_key);
+
+CREATE INDEX IF NOT EXISTS scenario_classifications_component_idx
+    ON tariff.classification_assertions(scenario_version, component_key);
