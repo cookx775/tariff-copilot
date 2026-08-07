@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import re
 from collections.abc import Sequence
@@ -103,8 +105,6 @@ SNAPSHOT_FIELDS = (
     "publication_date",
     "effective_date",
     "retrieved_at",
-    "raw_content",
-    "normalized_text",
     "source_provenance",
     "content_sha256",
 )
@@ -155,6 +155,24 @@ def _fixture_errors(path: Path) -> list[str]:
         r"[0-9a-fA-F]{64}", str(fixture["content_sha256"])
     ):
         errors.append("invalid content_sha256")
+    raw_content = fixture.get("raw_content")
+    raw_path = fixture.get("raw_content_path")
+    if raw_content:
+        raw_bytes = str(raw_content).encode("utf-8")
+    elif isinstance(raw_path, str) and raw_path.strip():
+        artifact = path.parent / raw_path
+        try:
+            raw_bytes = artifact.read_bytes()
+            if fixture.get("raw_content_encoding") == "base64":
+                raw_bytes = base64.b64decode(raw_bytes)
+        except (OSError, ValueError):
+            errors.append("invalid raw_content_path")
+            raw_bytes = b""
+    else:
+        errors.append("missing raw_content or raw_content_path")
+        raw_bytes = b""
+    if raw_bytes and hashlib.sha256(raw_bytes).hexdigest() != fixture.get("content_sha256"):
+        errors.append("raw content hash mismatch")
     for field, parser in (
         ("publication_date", date.fromisoformat),
         ("effective_date", date.fromisoformat),

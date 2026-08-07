@@ -7,10 +7,17 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from typing import Any, Optional
 
-HTS_PATTERN = re.compile(r"(?<!\d)(\d{4}(?:\.\d{2}){1,2})(?!\d)")
+HTS_PATTERN = re.compile(r"(?<!\d)(\d{4}(?:\.\d{2}){1,4})(?!\d)")
+EFFECTIVE_DATE_PATTERN = re.compile(
+    r"(?:on\s+or\s+after|effective(?:\s+beginning)?|applicable)"
+    r"(?:\s+with\s+respect\s+to[^.]{0,180})?\s+"
+    r"([A-Z][a-z]+\s+\d{1,2},\s+\d{4})",
+    re.IGNORECASE,
+)
 HEADING_PATTERN = re.compile(
     r"^(?:section|scope|annex|appendix|schedule|background)\b", re.IGNORECASE
 )
+NUL_ESCAPE = "\\0"
 
 
 @dataclass(frozen=True)
@@ -71,6 +78,13 @@ def normalize_federal_register_text(raw_content: str) -> str:
     return "\n\n".join(paragraphs).strip()
 
 
+def database_safe_federal_register_text(raw_content: str) -> str:
+    """Represent raw source text without PostgreSQL's forbidden U+0000 code point."""
+    if not isinstance(raw_content, str):
+        raise TypeError("Federal Register body text must be a string.")
+    return raw_content.replace("\x00", NUL_ESCAPE)
+
+
 def extract_hts_references(normalized_text: str) -> tuple[str, ...]:
     """Return ordered, de-duplicated HTS references found in policy text."""
     if not normalized_text:
@@ -81,6 +95,16 @@ def extract_hts_references(normalized_text: str) -> tuple[str, ...]:
         if code not in references:
             references.append(code)
     return tuple(references)
+
+
+def extract_effective_date(normalized_text: str) -> Optional[date]:
+    """Extract the first policy-effective date when source metadata omits it."""
+    if not normalized_text:
+        return None
+    match = EFFECTIVE_DATE_PATTERN.search(normalized_text)
+    if match is None:
+        return None
+    return datetime.strptime(match.group(1), "%B %d, %Y").replace(tzinfo=timezone.utc).date()
 
 
 def build_policy_notice(
@@ -113,16 +137,18 @@ def build_policy_notice(
     if missing:
         raise ValueError(f"Policy Notice Snapshot requires {', '.join(missing)}.")
 
+    raw_content = database_safe_federal_register_text(raw_content)
     normalized_text = normalize_federal_register_text(raw_content)
     if not normalized_text:
         raise ValueError("Policy Notice Snapshot requires non-empty normalized body text.")
+    parsed_effective_date = _coerce_date(effective_date)
     return PolicyNotice(
         source_identifier=source_identifier.strip(),
         title=title.strip(),
         agency=agency.strip(),
         canonical_url=canonical_url.strip(),
         publication_date=_coerce_date(publication_date),
-        effective_date=_coerce_date(effective_date),
+        effective_date=parsed_effective_date or extract_effective_date(normalized_text),
         retrieved_at=_coerce_datetime(retrieved_at),
         raw_content=raw_content,
         normalized_text=normalized_text,

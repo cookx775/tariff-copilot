@@ -1,10 +1,20 @@
 {
-  "fixture_status": "pending-live-capture",
-  "source_identifier": "negative-l-lysine",
-  "title": "Pinned negative L-Lysine policy notice",
-  "canonical_url": null,
-  "raw_content": null,
-  "content_sha256": null,
+  "fixture_status": "pinned-official-raw",
+  "source_identifier": "2026-01193",
+  "title": "L-Lysine From the People's Republic of China: Preliminary Affirmative Countervailing Duty Determination and Alignment of Final Determination With Final Antidumping Duty Determination",
+  "agency": "International Trade Administration, Department of Commerce",
+  "canonical_url": "https://www.federalregister.gov/d/2026-01193",
+  "is_featured": false,
+  "publication_date": "2026-01-22",
+  "effective_date": "2026-01-22",
+  "retrieved_at": "2026-08-07T21:12:34+00:00",
+  "raw_content_path": "pinned_raw/2026-01193.txt.b64",
+  "raw_content_encoding": "base64",
+  "content_sha256": "a3a56fc954ed7e2250309bffe1913c7531b9610c57d9fdd8a398c6dc0487e833",
+  "source_content_sha256": "a3a56fc954ed7e2250309bffe1913c7531b9610c57d9fdd8a398c6dc0487e833",
+  "raw_source_url": "https://www.federalregister.gov/documents/full_text/text/2026/01/22/2026-01193.txt",
+  "metadata_source_url": "https://www.federalregister.gov/api/v1/documents/2026-01193.json",
+  "source_provenance": "Pinned verbatim Federal Register raw-text response, captured from the official API-advertised raw_text_url.",
   "expected_outcome": {
     "annual_spend_exposed": 0,
     "spend_requiring_validation": 0,
@@ -12,5 +22,5 @@
     "recommended_actions": 0,
     "outlook_status": "No actionable exposure identified"
   },
-  "note": "Ticket 9 must replace this placeholder with the pinned Federal Register snapshot."
+  "note": "Pinned negative Demonstration Notice input. content_sha256/source_content_sha256 fingerprints the original official response bytes; the seed adapter records its DB-safe persisted-content hash in raw_payload. Normal live ingestion still fetches the source through FederalRegisterClient; this artifact is reproducibility evidence, not a live-run claim."
 }

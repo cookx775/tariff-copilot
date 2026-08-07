@@ -18,6 +18,7 @@ from tariff_app.db import get_connection_pool
 from tariff_app.embeddings import EmbeddingService
 from tariff_app.federal_register import FederalRegisterClient
 from tariff_app.models import PolicyEmbeddingRecord
+from tariff_app.pinned_evidence import PinnedDemonstrationNoticeSource
 from tariff_app.policy import (
     PolicyNotice,
     PolicyNoticeChunk,
@@ -27,6 +28,12 @@ from tariff_app.policy import (
 from tariff_app.repository import TariffRepository
 
 DEFAULT_DOCUMENT_NUMBERS = ["2026-15975"]
+FEATURED_DEMONSTRATION_DOCUMENT = "2018-20610"
+NEGATIVE_DEMONSTRATION_DOCUMENT = "2026-01193"
+DEMONSTRATION_NOTICE_SET = (
+    (FEATURED_DEMONSTRATION_DOCUMENT, True),
+    (NEGATIVE_DEMONSTRATION_DOCUMENT, False),
+)
 
 
 @dataclass(frozen=True)
@@ -174,6 +181,7 @@ def run_ingestion(
     federal_register_client: Any,
     embedding_service: Any,
     document_numbers: Sequence[str],
+    featured_document_numbers: Sequence[str] = (),
     spark: Any,
     transformer: Callable[
         [Any, PolicyNotice], TransformedPolicyNotice
@@ -181,8 +189,14 @@ def run_ingestion(
 ) -> dict[str, int]:
     """Fetch live policy evidence, transform it in Spark, then perform native PostgreSQL upserts."""
     totals = {"documents": 0, "snapshots": 0, "chunks": 0, "embeddings": 0}
+    featured = set(featured_document_numbers)
     for document_number in document_numbers:
-        source_notice = federal_register_client.fetch_document(document_number)
+        if document_number in featured:
+            source_notice = federal_register_client.fetch_document(
+                document_number, is_featured=True
+            )
+        else:
+            source_notice = federal_register_client.fetch_document(document_number)
         transformed = transformer(spark, source_notice)
         snapshot = repository.upsert_policy_notice(transformed.notice)
         stored_chunks = repository.upsert_policy_chunks(
@@ -212,22 +226,55 @@ def run_ingestion(
     return totals
 
 
+def run_demonstration_notice_ingestion(
+    *,
+    repository: Any,
+    federal_register_client: Any,
+    embedding_service: Any,
+    spark: Any,
+    transformer: Callable[
+        [Any, PolicyNotice], TransformedPolicyNotice
+    ] = transform_policy_notice_with_spark,
+) -> dict[str, int]:
+    """Load pinned bytes through the ordinary transform, persistence, and embedding path.
+
+    ``federal_register_client`` remains accepted for call compatibility with the live job's
+    dependency bundle, but this reproducible seed deliberately never invokes it.
+    """
+    return run_ingestion(
+        repository=repository,
+        federal_register_client=PinnedDemonstrationNoticeSource(),
+        embedding_service=embedding_service,
+        document_numbers=tuple(document_number for document_number, _ in DEMONSTRATION_NOTICE_SET),
+        featured_document_numbers=(FEATURED_DEMONSTRATION_DOCUMENT,),
+        spark=spark,
+        transformer=transformer,
+    )
+
+
 def main(argv: Optional[list[str]] = None) -> None:
     parser = argparse.ArgumentParser(
         description="Ingest Federal Register policy notices into Lakebase"
     )
     parser.add_argument("--document-number", action="append", dest="document_numbers")
+    parser.add_argument("--seed-demonstration-notices", action="store_true")
     args = parser.parse_args(argv)
 
     from pyspark.sql import SparkSession
 
-    result = run_ingestion(
-        repository=TariffRepository(get_connection_pool()),
-        federal_register_client=FederalRegisterClient(),
-        embedding_service=EmbeddingService(),
-        document_numbers=args.document_numbers or DEFAULT_DOCUMENT_NUMBERS,
-        spark=SparkSession.builder.getOrCreate(),
-    )
+    dependencies = {
+        "repository": TariffRepository(get_connection_pool()),
+        "federal_register_client": FederalRegisterClient(),
+        "embedding_service": EmbeddingService(),
+        "spark": SparkSession.builder.getOrCreate(),
+    }
+    if args.seed_demonstration_notices:
+        result = run_demonstration_notice_ingestion(**dependencies)
+    else:
+        result = run_ingestion(
+            **dependencies,
+            document_numbers=args.document_numbers or DEFAULT_DOCUMENT_NUMBERS,
+        )
     print(json.dumps(result, sort_keys=True))
 
 

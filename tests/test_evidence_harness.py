@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,19 +19,22 @@ from evidence_harness.package import (
 )
 from evidence_harness.runs import validate_run_record
 from evidence_harness.schema import verify_schema
+from tariff_app.policy import build_policy_notice
 
 
 def test_fixture_contract_covers_featured_and_negative_outcomes():
     contract = fixture_contract()
 
-    assert contract.featured.source_identifier == "2026-15975"
+    assert contract.featured.source_identifier == "2018-20610"
     assert contract.featured.expected_outcome["annual_spend_exposed"] == 6_000_000
     assert contract.featured.expected_outcome["spend_requiring_validation"] == 3_000_000
-    assert contract.negative.source_identifier == "negative-l-lysine"
+    assert contract.negative.source_identifier == "2026-01193"
+    assert contract.featured.is_featured is True
+    assert contract.negative.is_featured is False
     assert contract.negative.expected_outcome["outlook_status"] == (
         "No actionable exposure identified"
     )
-    assert contract.featured.fixture_status == "pending-live-capture"
+    assert contract.featured.fixture_status == "pinned-official-raw"
     root = Path(__file__).parents[1]
     featured_json = json.loads(
         (root / "evidence" / "fixtures" / "featured_policy_notice_snapshot.json").read_text()
@@ -39,6 +44,71 @@ def test_fixture_contract_covers_featured_and_negative_outcomes():
     )
     assert featured_json["expected_outcome"] == dict(contract.featured.expected_outcome)
     assert negative_json["expected_outcome"] == dict(contract.negative.expected_outcome)
+    assert featured_json["is_featured"] is contract.featured.is_featured
+    assert negative_json["is_featured"] is contract.negative.is_featured
+
+
+def test_pinned_demonstration_notice_raw_bodies_match_their_declared_source_hashes():
+    root = Path(__file__).parents[1]
+    for fixture_name in (
+        "featured_policy_notice_snapshot.json",
+        "negative_policy_notice_snapshot.json",
+    ):
+        fixture_path = root / "evidence" / "fixtures" / fixture_name
+        fixture = json.loads(fixture_path.read_text())
+        raw = (fixture_path.parent / fixture["raw_content_path"]).read_bytes()
+        if fixture["raw_content_encoding"] == "base64":
+            raw = base64.b64decode(raw)
+        assert hashlib.sha256(raw).hexdigest() == fixture["content_sha256"]
+        assert fixture["source_content_sha256"] == fixture["content_sha256"]
+        assert fixture["raw_source_url"].startswith("https://www.federalregister.gov/")
+
+
+def test_featured_pinned_raw_body_builds_the_expected_immutable_policy_snapshot():
+    root = Path(__file__).parents[1]
+    fixture_path = root / "evidence" / "fixtures" / "featured_policy_notice_snapshot.json"
+    fixture = json.loads(fixture_path.read_text())
+    raw = base64.b64decode((fixture_path.parent / fixture["raw_content_path"]).read_bytes())
+
+    snapshot = build_policy_notice(
+        source_identifier=fixture["source_identifier"],
+        title=fixture["title"],
+        agency="Office of the United States Trade Representative",
+        canonical_url=fixture["canonical_url"],
+        publication_date=fixture["publication_date"],
+        effective_date=None,
+        retrieved_at=fixture["retrieved_at"],
+        raw_content=raw.decode("utf-8"),
+        raw_payload={"document_number": fixture["source_identifier"]},
+        source_provenance=fixture["source_provenance"],
+        is_featured=True,
+    )
+
+    assert hashlib.sha256(raw).hexdigest() == fixture["source_content_sha256"]
+    assert "\x00" not in snapshot.raw_content
+    assert "\x00" not in snapshot.normalized_text
+    assert snapshot.raw_content.count("\\0") == raw.decode("utf-8").count("\x00")
+    assert snapshot.content_sha256 != fixture["source_content_sha256"]
+    assert snapshot.effective_date.isoformat() == fixture["effective_date"]
+
+
+def test_outlook_migration_removes_placeholder_defaults():
+    schema_sql = (Path(__file__).parents[1] / "sql" / "schema.sql").read_text()
+
+    assert "enterprise_data_version VARCHAR(100) NOT NULL DEFAULT" not in schema_sql
+    assert "classification_schedule_version VARCHAR(100) NOT NULL DEFAULT" not in schema_sql
+    assert "ALTER COLUMN enterprise_data_version DROP DEFAULT" in schema_sql
+    assert "ALTER COLUMN classification_schedule_version DROP DEFAULT" in schema_sql
+    assert "ALTER COLUMN impact_window_policy_citation DROP DEFAULT" in schema_sql
+    assert "ALTER COLUMN impact_window_policy_chunk_text DROP DEFAULT" in schema_sql
+    assert "impact_window_start DATE NOT NULL" not in schema_sql
+    assert "ALTER COLUMN impact_window_start SET NOT NULL" not in schema_sql
+    assert "requested_notice_id BIGINT NOT NULL" in schema_sql
+    assert "snapshot_obtained BOOLEAN NOT NULL" in schema_sql
+    assert (
+        "NOT snapshot_obtained AND notice_id IS NULL AND policy_snapshot_version IS NULL"
+        in schema_sql
+    )
 
 
 def test_schema_verifier_passes_only_when_static_and_observed_contracts_are_present():

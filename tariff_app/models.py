@@ -187,6 +187,7 @@ class SupplyRelationshipContext:
 @dataclass(frozen=True)
 class ClassificationAssertionContext:
     classification_key: str
+    supply_relationship_key: str
     sourced_variant: str
     jurisdiction: str
     schedule_period: str

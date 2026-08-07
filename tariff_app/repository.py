@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Iterable, Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,16 @@ from .models import (
     ScenarioComponent,
     ScenarioSeedSummary,
     SupplyRelationshipContext,
+)
+from .outlook import (
+    AgentRun,
+    ClassificationEvidence,
+    EvidenceBundle,
+    HTSScopeEvidence,
+    ImpactFinding,
+    ImpactOutlookSnapshot,
+    PolicyEvidence,
+    RecommendedAction,
 )
 from .policy import PolicyNotice, PolicyNoticeChunk
 from .scenario import (
@@ -38,13 +49,92 @@ NOTICE_COLUMNS = (
     "content_sha256, is_featured, analysis_state"
 )
 CHUNK_COLUMNS = "chunk_id, notice_id, chunk_index, section_title, chunk_text, start_offset, end_offset, hts_codes"
+OUTLOOK_COLUMNS = (
+    "outlook_id, notice_id, policy_snapshot_version, scenario_version, enterprise_data_version, "
+    "classification_schedule_version, analysis_version, "
+    "processing_state, outlook_status, impact_window_start, impact_window_label, "
+    "impact_window_policy_chunk_id, impact_window_policy_citation, impact_window_policy_chunk_text, "
+    "annual_spend_exposed, spend_requiring_validation, affected_product_line_count, "
+    "executive_brief, successor_of_outlook_id, created_at"
+)
 INDEX_NAME_PATTERN = re.compile(r"^CREATE INDEX IF NOT EXISTS ([A-Za-z0-9_]+)", re.IGNORECASE)
 MAX_CONTEXT_COMPONENTS = 20
 
 
+class RecordNotFound(LookupError):
+    pass
+
+
 def load_schema_statements(path: Path = SCHEMA_PATH) -> list[str]:
     """Load the app-owned DDL without making the database schema a code duplicate."""
-    return [statement.strip() for statement in path.read_text().split(";") if statement.strip()]
+    return _split_sql_statements(path.read_text())
+
+
+def _split_sql_statements(sql: str) -> list[str]:
+    """Split checked-in DDL while keeping PostgreSQL dollar-quoted migration guards intact."""
+    statements: list[str] = []
+    current: list[str] = []
+    dollar_tag: str | None = None
+    in_single_quote = False
+    in_double_quote = False
+    index = 0
+    while index < len(sql):
+        character = sql[index]
+        if dollar_tag is not None:
+            if sql.startswith(dollar_tag, index):
+                current.append(dollar_tag)
+                index += len(dollar_tag)
+                dollar_tag = None
+                continue
+            current.append(character)
+            index += 1
+            continue
+        if in_single_quote:
+            current.append(character)
+            if character == "'":
+                if index + 1 < len(sql) and sql[index + 1] == "'":
+                    current.append(sql[index + 1])
+                    index += 2
+                    continue
+                in_single_quote = False
+            index += 1
+            continue
+        if in_double_quote:
+            current.append(character)
+            if character == '"':
+                in_double_quote = False
+            index += 1
+            continue
+        if character == "'":
+            in_single_quote = True
+            current.append(character)
+            index += 1
+            continue
+        if character == '"':
+            in_double_quote = True
+            current.append(character)
+            index += 1
+            continue
+        if character == "$":
+            tag_match = re.match(r"\$[A-Za-z_][A-Za-z0-9_]*\$|\$\$", sql[index:])
+            if tag_match is not None:
+                dollar_tag = tag_match.group(0)
+                current.append(dollar_tag)
+                index += len(dollar_tag)
+                continue
+        if character == ";":
+            statement = "".join(current).strip()
+            if statement:
+                statements.append(statement)
+            current = []
+            index += 1
+            continue
+        current.append(character)
+        index += 1
+    statement = "".join(current).strip()
+    if statement:
+        statements.append(statement)
+    return statements
 
 
 class TariffRepository:
@@ -97,6 +187,226 @@ class TariffRepository:
             """
         )
         return [PolicyNoticeSnapshot.from_row(row) for row in rows]
+
+    def get_policy_notice_snapshot(self, notice_id: int) -> PolicyNoticeSnapshot:
+        if notice_id <= 0:
+            raise ValueError("A Policy Notice Snapshot identifier must be positive.")
+        row = self._fetchone(
+            f"""
+            SELECT {NOTICE_COLUMNS}
+            FROM tariff.policy_notice_snapshots
+            WHERE notice_id = %s
+            """,
+            (notice_id,),
+        )
+        if row is None:
+            raise RecordNotFound(f"Policy Notice Snapshot {notice_id} does not exist.")
+        return PolicyNoticeSnapshot.from_row(row)
+
+    def get_complete_impact_outlook_for_notice(
+        self,
+        notice_id: int,
+        *,
+        policy_snapshot_version: str | None = None,
+        scenario_version: str | None = None,
+        enterprise_data_version: str | None = None,
+        classification_schedule_version: str | None = None,
+        analysis_version: str | None = None,
+    ) -> ImpactOutlookSnapshot | None:
+        if notice_id <= 0:
+            raise ValueError("A Policy Notice Snapshot identifier must be positive.")
+        versions = (
+            policy_snapshot_version,
+            scenario_version,
+            enterprise_data_version,
+            classification_schedule_version,
+            analysis_version,
+        )
+        if any(value is not None for value in versions) and any(
+            value is None for value in versions
+        ):
+            raise ValueError(
+                "Complete Impact Outlook lookup requires every deterministic input version."
+            )
+        version_filter = ""
+        params: tuple[Any, ...] = (notice_id,)
+        if all(value is not None for value in versions):
+            version_filter = """
+              AND policy_snapshot_version = %s
+              AND scenario_version = %s
+              AND enterprise_data_version = %s
+              AND classification_schedule_version = %s
+              AND analysis_version = %s
+            """
+            params += tuple(versions)
+        row = self._fetchone(
+            f"""
+            SELECT {OUTLOOK_COLUMNS}
+            FROM tariff.impact_outlook_snapshots
+            WHERE notice_id = %s
+              AND processing_state = 'Complete'
+              AND NULLIF(BTRIM(COALESCE(policy_snapshot_version, '')), '') IS NOT NULL
+              AND LOWER(BTRIM(COALESCE(policy_snapshot_version, ''))) <> 'unavailable'
+              AND NULLIF(BTRIM(COALESCE(scenario_version, '')), '') IS NOT NULL
+              AND LOWER(BTRIM(COALESCE(scenario_version, ''))) <> 'unavailable'
+              AND NULLIF(BTRIM(COALESCE(enterprise_data_version, '')), '') IS NOT NULL
+              AND LOWER(BTRIM(COALESCE(enterprise_data_version, ''))) <> 'unavailable'
+              AND NULLIF(BTRIM(COALESCE(classification_schedule_version, '')), '') IS NOT NULL
+              AND LOWER(BTRIM(COALESCE(classification_schedule_version, ''))) <> 'unavailable'
+              AND NULLIF(BTRIM(COALESCE(analysis_version, '')), '') IS NOT NULL
+              AND LOWER(BTRIM(COALESCE(analysis_version, ''))) <> 'unavailable'
+              AND NULLIF(BTRIM(COALESCE(impact_window_label, '')), '') IS NOT NULL
+              AND LOWER(BTRIM(COALESCE(impact_window_label, ''))) <> 'unavailable'
+              AND impact_window_policy_chunk_id IS NOT NULL
+              AND NULLIF(BTRIM(COALESCE(impact_window_policy_citation, '')), '') IS NOT NULL
+              AND LOWER(BTRIM(COALESCE(impact_window_policy_citation, ''))) <> 'unavailable'
+              AND NULLIF(BTRIM(COALESCE(impact_window_policy_chunk_text, '')), '') IS NOT NULL
+              AND LOWER(BTRIM(COALESCE(impact_window_policy_chunk_text, ''))) <> 'unavailable'
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM tariff.impact_findings legacy_finding
+                  JOIN tariff.impact_finding_evidence_bundles legacy_evidence
+                    ON legacy_evidence.finding_id = legacy_finding.finding_id
+                  WHERE legacy_finding.outlook_id = tariff.impact_outlook_snapshots.outlook_id
+                    AND (
+                        legacy_evidence.hts_scope_citation IS NULL
+                        OR NULLIF(BTRIM(COALESCE(legacy_evidence.hts_scope_citation, '')), '') IS NULL
+                        OR LOWER(BTRIM(COALESCE(legacy_evidence.hts_scope_citation, ''))) = 'unavailable'
+                        OR legacy_evidence.hts_scope_canonical_url IS NULL
+                        OR NULLIF(BTRIM(COALESCE(legacy_evidence.hts_scope_canonical_url, '')), '') IS NULL
+                        OR LOWER(BTRIM(COALESCE(legacy_evidence.hts_scope_canonical_url, ''))) = 'unavailable'
+                        OR legacy_evidence.hts_scope_source_sha256 IS NULL
+                        OR legacy_evidence.hts_scope_source_sha256 !~ '^[0-9a-fA-F]{64}$'
+                        OR legacy_evidence.hts_scope_text IS NULL
+                        OR NULLIF(BTRIM(COALESCE(legacy_evidence.hts_scope_text, '')), '') IS NULL
+                        OR LOWER(BTRIM(COALESCE(legacy_evidence.hts_scope_text, ''))) = 'unavailable'
+                        OR legacy_evidence.hts_scope_codes IS NULL
+                        OR jsonb_typeof(legacy_evidence.hts_scope_codes) IS DISTINCT FROM 'array'
+                        OR legacy_evidence.hts_scope_codes = '[]'::jsonb
+                        OR legacy_evidence.classification_evidence IS NULL
+                        OR jsonb_typeof(legacy_evidence.classification_evidence) IS DISTINCT FROM 'array'
+                        OR legacy_evidence.classification_evidence = '[]'::jsonb
+                    )
+              )
+              {version_filter}
+            ORDER BY created_at DESC, outlook_id DESC
+            LIMIT 1
+            """,
+            params,
+        )
+        if row is None:
+            return None
+        return self._load_impact_outlook(row)
+
+    def persist_impact_outlook(
+        self, *, outlook: ImpactOutlookSnapshot, agent_run: AgentRun
+    ) -> ImpactOutlookSnapshot:
+        """Append one complete immutable snapshot, its complete evidence, and bounded audit run."""
+        should_load_existing = False
+        with self._pool.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                INSERT INTO tariff.impact_outlook_snapshots (
+                    notice_id, policy_snapshot_version, scenario_version, enterprise_data_version,
+                    classification_schedule_version, analysis_version,
+                    processing_state, outlook_status, impact_window_start, impact_window_label,
+                    impact_window_policy_chunk_id, impact_window_policy_citation,
+                    impact_window_policy_chunk_text,
+                    annual_spend_exposed, spend_requiring_validation, affected_product_line_count,
+                    executive_brief, successor_of_outlook_id, created_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s
+                )
+                ON CONFLICT (
+                    notice_id, policy_snapshot_version, scenario_version,
+                    enterprise_data_version, classification_schedule_version, analysis_version
+                )
+                DO NOTHING
+                RETURNING {OUTLOOK_COLUMNS}
+                """,
+                _outlook_insert_params(outlook),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                should_load_existing = True
+            else:
+                persisted = _outlook_from_row(row)
+                for finding in outlook.findings:
+                    cursor.execute(
+                        """
+                        INSERT INTO tariff.impact_findings (
+                            outlook_id, finding_key, product_line_key, product_line_name,
+                            segment_name, annual_spend_exposed, spend_requiring_validation
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING finding_id
+                        """,
+                        (
+                            persisted.outlook_id,
+                            finding.finding_key,
+                            finding.product_line_key,
+                            finding.product_line_name,
+                            finding.segment_name,
+                            finding.annual_spend_exposed,
+                            finding.spend_requiring_validation,
+                        ),
+                    )
+                    finding_id = cursor.fetchone()["finding_id"]
+                    for bundle in finding.evidence_bundles:
+                        cursor.execute(
+                            """
+                            INSERT INTO tariff.impact_finding_evidence_bundles (
+                                finding_id, policy_chunk_id, policy_citation, policy_canonical_url,
+                                policy_chunk_text, hts_scope_citation, hts_scope_canonical_url,
+                                hts_scope_source_sha256, hts_scope_text, hts_scope_codes,
+                                classification_evidence, component_key,
+                                component_name, supply_relationship_key, supplier_key, supplier_name,
+                                origin_code, origin_name, annual_spend, measurement_period,
+                                scenario_version, scenario_path, match_confidence, reasoning, uncertainty
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb,
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            )
+                            """,
+                            _evidence_bundle_insert_params(finding_id, bundle),
+                        )
+                for action in outlook.recommended_actions:
+                    cursor.execute(
+                        """
+                        INSERT INTO tariff.recommended_actions (
+                            outlook_id, action_key, title, priority, is_conditional,
+                            evidence_relationship_keys
+                        ) VALUES (%s, %s, %s, %s, %s, %s::jsonb)
+                        """,
+                        (
+                            persisted.outlook_id,
+                            action.action_key,
+                            action.title,
+                            action.priority,
+                            action.is_conditional,
+                            json.dumps(action.evidence_relationship_keys),
+                        ),
+                    )
+                _append_agent_run(cursor, agent_run, outlook_id=persisted.outlook_id)
+        if should_load_existing:
+            existing = self.get_complete_impact_outlook_for_notice(outlook.notice_id)
+            if existing is None:
+                raise RuntimeError("Immutable Impact Outlook conflict did not return a snapshot.")
+            self.append_agent_run(
+                replace(
+                    agent_run,
+                    outcome="Existing immutable Impact Outlook Snapshot returned after insert race",
+                    outlook_id=existing.outlook_id,
+                )
+            )
+            return existing
+        return persisted
+
+    def append_agent_run(self, agent_run: AgentRun) -> AgentRun:
+        """Append a complete or failed attempt without writing or changing an Outlook."""
+        with self._pool.connection() as connection, connection.cursor() as cursor:
+            agent_run_id = _append_agent_run(cursor, agent_run, outlook_id=agent_run.outlook_id)
+        return replace(agent_run, agent_run_id=agent_run_id)
 
     def upsert_policy_notice(self, notice: PolicyNotice) -> PolicyNoticeSnapshot:
         """Persist a new Policy Notice Snapshot or return the matching immutable version."""
@@ -208,12 +518,25 @@ class TariffRepository:
         return len(records)
 
     def search_policy_evidence(
-        self, query_embedding: Sequence[float], *, top_k: int = 5
+        self,
+        query_embedding: Sequence[float],
+        *,
+        top_k: int = 5,
+        notice_id: int | None = None,
     ) -> list[PolicySearchResult]:
         self._validate_vector(query_embedding)
+        if notice_id is not None and notice_id <= 0:
+            raise ValueError("A Policy Notice Snapshot identifier must be positive.")
         vector = _vector_literal(query_embedding)
+        notice_filter = ""
+        params: tuple[Any, ...]
+        if notice_id is None:
+            params = (vector, vector, max(1, min(int(top_k), 20)))
+        else:
+            notice_filter = "WHERE c.notice_id = %s"
+            params = (vector, notice_id, vector, max(1, min(int(top_k), 20)))
         rows = self._fetchall(
-            """
+            f"""
             SELECT
                 n.notice_id,
                 n.source_identifier,
@@ -229,10 +552,11 @@ class TariffRepository:
             FROM tariff.policy_notice_embeddings e
             JOIN tariff.policy_notice_chunks c ON c.chunk_id = e.chunk_id
             JOIN tariff.policy_notice_snapshots n ON n.notice_id = c.notice_id
+            {notice_filter}
             ORDER BY e.embedding <=> %s::vector, c.chunk_id
             LIMIT %s
             """,
-            (vector, vector, max(1, min(int(top_k), 20))),
+            params,
         )
         return [PolicySearchResult.from_row(row) for row in rows]
 
@@ -520,7 +844,7 @@ class TariffRepository:
         )
         classification_rows = self._fetchall(
             """
-            SELECT component_key, classification_key, sourced_variant,
+            SELECT component_key, classification_key, supply_relationship_key, sourced_variant,
                    jurisdiction, schedule_period, hts_code, state,
                    provenance_label, source_name, source_url, source_citation
             FROM tariff.classification_assertions
@@ -585,6 +909,7 @@ class TariffRepository:
             classifications.setdefault(row["component_key"], []).append(
                 ClassificationAssertionContext(
                     classification_key=row["classification_key"],
+                    supply_relationship_key=row["supply_relationship_key"],
                     sourced_variant=row["sourced_variant"],
                     jurisdiction=row["jurisdiction"],
                     schedule_period=row["schedule_period"],
@@ -613,6 +938,80 @@ class TariffRepository:
             if (details := component_details.get(component_key)) is not None
         ]
 
+    def _load_impact_outlook(self, row: Any) -> ImpactOutlookSnapshot:
+        outlook = _outlook_from_row(row)
+        finding_rows = self._fetchall(
+            """
+            SELECT finding_id, finding_key, product_line_key, product_line_name, segment_name,
+                   annual_spend_exposed, spend_requiring_validation
+            FROM tariff.impact_findings
+            WHERE outlook_id = %s
+            ORDER BY finding_key
+            """,
+            (outlook.outlook_id,),
+        )
+        evidence_rows = self._fetchall(
+            """
+            SELECT f.finding_id, e.policy_chunk_id, e.policy_citation, e.policy_canonical_url,
+                   e.policy_chunk_text, e.hts_scope_citation, e.hts_scope_canonical_url,
+                   e.hts_scope_source_sha256, e.hts_scope_text, e.hts_scope_codes,
+                   e.classification_evidence, e.component_key,
+                   e.component_name, e.supply_relationship_key, e.supplier_key, e.supplier_name,
+                   e.origin_code, e.origin_name, e.annual_spend, e.measurement_period,
+                   e.scenario_version, e.scenario_path, e.match_confidence, e.reasoning, e.uncertainty
+            FROM tariff.impact_finding_evidence_bundles e
+            JOIN tariff.impact_findings f ON f.finding_id = e.finding_id
+            WHERE f.outlook_id = %s
+            ORDER BY f.finding_key, e.supply_relationship_key
+            """,
+            (outlook.outlook_id,),
+        )
+        action_rows = self._fetchall(
+            """
+            SELECT action_key, title, priority, is_conditional, evidence_relationship_keys
+            FROM tariff.recommended_actions
+            WHERE outlook_id = %s
+            ORDER BY priority
+            """,
+            (outlook.outlook_id,),
+        )
+        evidence_by_finding: dict[int, list[EvidenceBundle]] = {}
+        for evidence_row in evidence_rows:
+            evidence_by_finding.setdefault(evidence_row["finding_id"], []).append(
+                _evidence_bundle_from_row(evidence_row)
+            )
+        findings = tuple(
+            ImpactFinding(
+                finding_key=finding_row["finding_key"],
+                product_line_key=finding_row["product_line_key"],
+                product_line_name=finding_row["product_line_name"],
+                segment_name=finding_row["segment_name"],
+                annual_spend_exposed=finding_row["annual_spend_exposed"],
+                spend_requiring_validation=finding_row["spend_requiring_validation"],
+                evidence_bundles=tuple(evidence_by_finding.get(finding_row["finding_id"], [])),
+            )
+            for finding_row in finding_rows
+        )
+        actions = tuple(
+            RecommendedAction(
+                action_key=action_row["action_key"],
+                title=action_row["title"],
+                priority=action_row["priority"],
+                is_conditional=action_row["is_conditional"],
+                evidence_relationship_keys=tuple(
+                    _json_value(action_row["evidence_relationship_keys"])
+                ),
+            )
+            for action_row in action_rows
+        )
+        return ImpactOutlookSnapshot(
+            **{
+                **outlook.__dict__,
+                "findings": findings,
+                "recommended_actions": actions,
+            }
+        )
+
     def _fetchall(self, query: str, params: Any = None) -> list[Any]:
         with self._pool.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
@@ -638,3 +1037,214 @@ class TariffRepository:
 
 def _vector_literal(values: Iterable[float]) -> str:
     return "[" + ",".join(str(float(value)) for value in values) + "]"
+
+
+def _outlook_insert_params(outlook: ImpactOutlookSnapshot) -> tuple[Any, ...]:
+    return (
+        outlook.notice_id,
+        outlook.policy_snapshot_version,
+        outlook.scenario_version,
+        outlook.enterprise_data_version,
+        outlook.classification_schedule_version,
+        outlook.analysis_version,
+        outlook.processing_state,
+        outlook.outlook_status,
+        outlook.impact_window_start,
+        outlook.impact_window_label,
+        outlook.impact_window_policy_evidence.chunk_id,
+        outlook.impact_window_policy_evidence.citation,
+        outlook.impact_window_policy_evidence.chunk_text,
+        outlook.annual_spend_exposed,
+        outlook.spend_requiring_validation,
+        outlook.affected_product_line_count,
+        outlook.executive_brief,
+        outlook.successor_of_outlook_id,
+        outlook.created_at,
+    )
+
+
+def _evidence_bundle_insert_params(finding_id: int, bundle: EvidenceBundle) -> tuple[Any, ...]:
+    classifications = [
+        {
+            "classification_key": item.classification_key,
+            "hts_code": item.hts_code,
+            "state": item.state,
+            "sourced_variant": item.sourced_variant,
+            "jurisdiction": item.jurisdiction,
+            "schedule_period": item.schedule_period,
+            "provenance_label": item.provenance.label,
+            "source_name": item.provenance.source_name,
+            "source_url": item.provenance.source_url,
+            "source_citation": item.provenance.source_citation,
+        }
+        for item in bundle.classification_evidence
+    ]
+    return (
+        finding_id,
+        bundle.policy_evidence.chunk_id,
+        bundle.policy_evidence.citation,
+        bundle.policy_evidence.canonical_url,
+        bundle.policy_evidence.chunk_text,
+        bundle.hts_scope_evidence.citation,
+        bundle.hts_scope_evidence.canonical_url,
+        bundle.hts_scope_evidence.source_sha256,
+        bundle.hts_scope_evidence.scope_text,
+        json.dumps(bundle.hts_scope_evidence.hts_codes),
+        json.dumps(classifications, sort_keys=True),
+        bundle.component_key,
+        bundle.component_name,
+        bundle.supply_relationship_key,
+        bundle.supplier_key,
+        bundle.supplier_name,
+        bundle.origin_code,
+        bundle.origin_name,
+        bundle.annual_spend,
+        bundle.measurement_period,
+        bundle.scenario_version,
+        bundle.scenario_path,
+        bundle.match_confidence,
+        bundle.reasoning,
+        bundle.uncertainty,
+    )
+
+
+def _outlook_from_row(row: Any) -> ImpactOutlookSnapshot:
+    return ImpactOutlookSnapshot(
+        outlook_id=row["outlook_id"],
+        notice_id=row["notice_id"],
+        policy_snapshot_version=row["policy_snapshot_version"],
+        scenario_version=row["scenario_version"],
+        enterprise_data_version=row["enterprise_data_version"],
+        classification_schedule_version=row["classification_schedule_version"],
+        analysis_version=row["analysis_version"],
+        processing_state=row["processing_state"],
+        outlook_status=row["outlook_status"],
+        impact_window_start=row["impact_window_start"],
+        impact_window_label=row["impact_window_label"],
+        impact_window_policy_evidence=PolicyEvidence(
+            chunk_id=row["impact_window_policy_chunk_id"],
+            citation=row["impact_window_policy_citation"],
+            canonical_url="",
+            chunk_text=row["impact_window_policy_chunk_text"],
+        ),
+        annual_spend_exposed=row["annual_spend_exposed"],
+        spend_requiring_validation=row["spend_requiring_validation"],
+        affected_product_line_count=row["affected_product_line_count"],
+        executive_brief=row["executive_brief"],
+        findings=(),
+        recommended_actions=(),
+        created_at=row["created_at"],
+        successor_of_outlook_id=row["successor_of_outlook_id"],
+    )
+
+
+def _evidence_bundle_from_row(row: Any) -> EvidenceBundle:
+    classification_evidence = _json_value(row["classification_evidence"])
+    return EvidenceBundle(
+        policy_evidence=PolicyEvidence(
+            chunk_id=row["policy_chunk_id"],
+            citation=row["policy_citation"],
+            canonical_url=row["policy_canonical_url"],
+            chunk_text=row["policy_chunk_text"],
+        ),
+        hts_scope_evidence=HTSScopeEvidence(
+            citation=row["hts_scope_citation"],
+            canonical_url=row["hts_scope_canonical_url"],
+            source_sha256=row["hts_scope_source_sha256"],
+            scope_text=row["hts_scope_text"],
+            hts_codes=tuple(_json_value(row["hts_scope_codes"])),
+        ),
+        classification_evidence=tuple(
+            ClassificationEvidence(
+                classification_key=item["classification_key"],
+                hts_code=item["hts_code"],
+                state=item["state"],
+                sourced_variant=item["sourced_variant"],
+                jurisdiction=item["jurisdiction"],
+                schedule_period=item["schedule_period"],
+                provenance=ProvenanceRecord(
+                    label=item["provenance_label"],
+                    source_name=item["source_name"],
+                    source_url=item["source_url"],
+                    source_citation=item["source_citation"],
+                ),
+            )
+            for item in classification_evidence
+        ),
+        component_key=row["component_key"],
+        component_name=row["component_name"],
+        supply_relationship_key=row["supply_relationship_key"],
+        supplier_key=row["supplier_key"],
+        supplier_name=row["supplier_name"],
+        origin_code=row["origin_code"],
+        origin_name=row["origin_name"],
+        annual_spend=row["annual_spend"],
+        measurement_period=row["measurement_period"],
+        scenario_version=row["scenario_version"],
+        scenario_path=row["scenario_path"],
+        match_confidence=row["match_confidence"],
+        reasoning=row["reasoning"],
+        uncertainty=row["uncertainty"],
+    )
+
+
+def _json_value(value: Any) -> Any:
+    return json.loads(value) if isinstance(value, str) else value
+
+
+def _append_agent_run(cursor: Any, agent_run: AgentRun, *, outlook_id: int | None) -> int:
+    cursor.execute(
+        """
+        INSERT INTO tariff.agent_runs (
+            actor_email, operation, requested_notice_id, notice_id, outlook_id,
+            policy_snapshot_version, snapshot_obtained,
+            scenario_version, enterprise_data_version, classification_schedule_version,
+            analysis_version, model_version, prompt_version, processing_state, outcome,
+            started_at, completed_at, error_boundary, retry_predecessor_run_id
+        ) VALUES (
+            %s, 'analyze_policy_notice', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s
+        )
+        RETURNING agent_run_id
+        """,
+        (
+            agent_run.actor_email,
+            agent_run.requested_notice_id,
+            agent_run.notice_id,
+            outlook_id,
+            agent_run.policy_snapshot_version,
+            agent_run.snapshot_obtained,
+            agent_run.scenario_version,
+            agent_run.enterprise_data_version,
+            agent_run.classification_schedule_version,
+            agent_run.analysis_version,
+            agent_run.model_version,
+            agent_run.prompt_version,
+            agent_run.processing_state,
+            agent_run.outcome,
+            agent_run.started_at,
+            agent_run.completed_at,
+            agent_run.error_boundary,
+            agent_run.retry_predecessor_run_id,
+        ),
+    )
+    agent_run_id = cursor.fetchone()["agent_run_id"]
+    for event in agent_run.tool_events:
+        cursor.execute(
+            """
+            INSERT INTO tariff.agent_tool_events (
+                agent_run_id, event_index, tool_name, tool_version, input_summary,
+                output_summary, occurred_at
+            ) VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb, %s)
+            """,
+            (
+                agent_run_id,
+                event.event_index,
+                event.tool_name,
+                event.tool_version,
+                json.dumps(dict(event.input_summary), sort_keys=True),
+                json.dumps(dict(event.output_summary), sort_keys=True),
+                event.occurred_at,
+            ),
+        )
+    return agent_run_id

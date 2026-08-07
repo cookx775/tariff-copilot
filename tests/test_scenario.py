@@ -111,10 +111,11 @@ def context_rows():
             {
                 "component_key": "valve_body_trim",
                 "classification_key": "valve_body_trim_cn_validated",
-                "sourced_variant": "primary-cn-01",
+                "supply_relationship_key": "valve_body_trim_cn_01",
+                "sourced_variant": "verified-check-valve-cn-01",
                 "jurisdiction": "US",
                 "schedule_period": "2025-09-30",
-                "hts_code": "8481.90.90.20",
+                "hts_code": "8481.30.10",
                 "state": "validated",
                 "provenance_label": "Synthetic demonstration data",
                 "source_name": "Demonstration Scenario v1",
@@ -178,6 +179,9 @@ def test_retrieve_exposure_context_is_bounded_to_selected_components_and_keeps_s
     ) == Decimal("6000000.00")
     assert contexts[0].supply_relationships[0].provenance.label == "Synthetic demonstration data"
     assert contexts[0].classification_assertions[0].state == "validated"
+    assert (
+        contexts[0].classification_assertions[0].supply_relationship_key == "valve_body_trim_cn_01"
+    )
 
     retrieval_params = [params for query, params in cursor.executions if "ANY" in query]
     assert retrieval_params == [
@@ -196,3 +200,14 @@ def test_classification_assertions_keep_state_variant_jurisdiction_and_period():
 
     assert states == {"validated", "candidate", "superseded"}
     assert len(dimensions) > 1
+
+
+def test_featured_valve_classification_uses_the_exact_official_annex_heading():
+    featured = next(
+        assertion
+        for assertion in DEMONSTRATION_SCENARIO.classification_assertions
+        if assertion.key == "valve_body_trim_cn_validated"
+    )
+
+    assert featured.hts_code == "8481.30.10"
+    assert featured.sourced_variant == "verified-check-valve-cn-01"

@@ -1,6 +1,13 @@
 from datetime import datetime, timezone
 
-from jobs.ingest_policy_notices import run_ingestion, transform_policy_notice
+from evidence_harness.fixtures import fixture_contract
+from jobs.ingest_policy_notices import (
+    FEATURED_DEMONSTRATION_DOCUMENT,
+    NEGATIVE_DEMONSTRATION_DOCUMENT,
+    run_demonstration_notice_ingestion,
+    run_ingestion,
+    transform_policy_notice,
+)
 from tariff_app.models import PolicyNoticeChunkRecord, PolicyNoticeSnapshot
 from tariff_app.policy import build_policy_notice
 
@@ -27,6 +34,15 @@ class FakeFederalRegisterClient:
         return source_notice()
 
 
+class NoLiveFederalRegisterClient:
+    def __init__(self):
+        self.calls = []
+
+    def fetch_document(self, document_number, *, is_featured=False):
+        self.calls.append((document_number, is_featured))
+        raise AssertionError("Pinned demonstration seeding must not call the live client.")
+
+
 class FakeEmbeddingService:
     endpoint_name = "databricks-gte-large-en"
     model_version = "gte-large-v1"
@@ -38,8 +54,10 @@ class FakeEmbeddingService:
 class FakeRepository:
     def __init__(self):
         self.embeddings = []
+        self.notices = []
 
     def upsert_policy_notice(self, notice):
+        self.notices.append(notice)
         return PolicyNoticeSnapshot(
             notice_id=7,
             source_identifier=notice.source_identifier,
@@ -49,7 +67,7 @@ class FakeRepository:
             publication_date=notice.publication_date,
             retrieved_at=notice.retrieved_at,
             content_sha256=notice.content_sha256,
-            is_featured=False,
+            is_featured=notice.is_featured,
         )
 
     def upsert_policy_chunks(self, *, notice_id, chunks):
@@ -94,3 +112,35 @@ def test_ingestion_job_fetches_transforms_embeds_and_persists_one_live_notice():
     assert result == {"documents": 1, "snapshots": 1, "chunks": 1, "embeddings": 1}
     assert repository.embeddings[0].chunk_id == 11
     assert repository.embeddings[0].model_version == "gte-large-v1"
+
+
+def test_pinned_demonstration_notice_set_uses_the_native_source_to_vector_path():
+    repository = FakeRepository()
+    client = NoLiveFederalRegisterClient()
+
+    result = run_demonstration_notice_ingestion(
+        repository=repository,
+        federal_register_client=client,
+        embedding_service=FakeEmbeddingService(),
+        transformer=lambda _spark, notice: transform_policy_notice(
+            notice, chunk_size=100_000, chunk_overlap=0
+        ),
+        spark=object(),
+    )
+
+    assert result == {"documents": 2, "snapshots": 2, "chunks": 2, "embeddings": 2}
+    assert client.calls == []
+    assert [(notice.source_identifier, notice.is_featured) for notice in repository.notices] == [
+        ("2018-20610", True),
+        ("2026-01193", False),
+    ]
+    contract = fixture_contract()
+    assert [notice.raw_payload["source_content_sha256"] for notice in repository.notices] == [
+        contract.featured.content_sha256,
+        contract.negative.content_sha256,
+    ]
+    assert repository.notices[0].raw_payload["fixture_status"] == "pinned-official-raw"
+    assert repository.notices[0].raw_payload["source_nul_count"] == 4
+    assert all("\x00" not in notice.raw_content for notice in repository.notices)
+    assert FEATURED_DEMONSTRATION_DOCUMENT == repository.notices[0].source_identifier
+    assert NEGATIVE_DEMONSTRATION_DOCUMENT == repository.notices[1].source_identifier

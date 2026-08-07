@@ -8,17 +8,13 @@
     },
     {
       "missing_artifacts": [
-        "evidence/fixtures/featured_policy_notice_snapshot.json",
-        "evidence/runs/federal-register.json",
-        "evidence/fixtures/featured_policy_notice_snapshot.json (placeholder fixture)"
+        "evidence/runs/federal-register.json"
       ],
       "requirement": "third_party_api"
     },
     {
       "missing_artifacts": [
-        "evidence/fixtures/featured_policy_notice_snapshot.json",
-        "evidence/runs/semantic-retrieval.json",
-        "evidence/fixtures/featured_policy_notice_snapshot.json (placeholder fixture)"
+        "evidence/runs/semantic-retrieval.json"
       ],
       "requirement": "unstructured_retrieval"
     },
@@ -31,7 +27,6 @@
     },
     {
       "missing_artifacts": [
-        "tariff_app/agent.py",
         "evidence/runs/agent-write.json"
       ],
       "requirement": "agent_retrieval_and_write"
@@ -129,13 +124,12 @@
     },
     {
       "evidence_claim": "Not verified; missing or invalid artifacts are listed explicitly.",
-      "found_artifacts": [],
-      "invalid_artifacts": [
-        "evidence/fixtures/featured_policy_notice_snapshot.json (placeholder fixture)"
+      "found_artifacts": [
+        "evidence/fixtures/featured_policy_notice_snapshot.json"
       ],
+      "invalid_artifacts": [],
       "key": "third_party_api",
       "missing_artifacts": [
-        "evidence/fixtures/featured_policy_notice_snapshot.json",
         "evidence/runs/federal-register.json"
       ],
       "name": "At least one third-party API",
@@ -152,15 +146,13 @@
     {
       "evidence_claim": "Not verified; missing or invalid artifacts are listed explicitly.",
       "found_artifacts": [
+        "evidence/fixtures/featured_policy_notice_snapshot.json",
         "sql/schema.sql",
         "tariff_app/retrieval.py"
       ],
-      "invalid_artifacts": [
-        "evidence/fixtures/featured_policy_notice_snapshot.json (placeholder fixture)"
-      ],
+      "invalid_artifacts": [],
       "key": "unstructured_retrieval",
       "missing_artifacts": [
-        "evidence/fixtures/featured_policy_notice_snapshot.json",
         "evidence/runs/semantic-retrieval.json"
       ],
       "name": "Processing of unstructured data and semantic retrieval",
@@ -205,12 +197,12 @@
       "evidence_claim": "Not verified; missing or invalid artifacts are listed explicitly.",
       "found_artifacts": [
         "sql/schema.sql",
+        "tariff_app/agent.py",
         "tariff_app/workflow.py"
       ],
       "invalid_artifacts": [],
       "key": "agent_retrieval_and_write",
       "missing_artifacts": [
-        "tariff_app/agent.py",
         "evidence/runs/agent-write.json"
       ],
       "name": "AI agent that retrieves evidence and performs a durable write",

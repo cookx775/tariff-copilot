@@ -204,6 +204,105 @@ def render_policy_evidence_search(workflow: TariffWorkflow) -> None:
         st.markdown(f"[Open source notice]({result.canonical_url})")
 
 
+def render_impact_outlook(outlook) -> None:
+    """Render a persisted result only; all analysis remains behind the workflow facade."""
+    st.markdown("### Impact Outlook")
+    st.caption(
+        "Immutable analysis snapshot. Annual Spend Exposed is modeled purchase spend, not an "
+        "expected cost increase."
+    )
+    st.markdown("#### Impact brief")
+    st.write(outlook.executive_brief)
+    st.caption(outlook.impact_window_label)
+    st.caption(f"Impact Window evidence: {outlook.impact_window_policy_evidence.citation}")
+
+    st.markdown("#### Decision metrics")
+    metrics = st.columns(3)
+    metrics[0].metric("Annual Spend Exposed", f"${outlook.annual_spend_exposed:,.0f}")
+    metrics[1].metric("Spend Requiring Validation", f"${outlook.spend_requiring_validation:,.0f}")
+    metrics[2].metric("Affected product lines", outlook.affected_product_line_count)
+    st.caption(f"Outlook Status: {outlook.outlook_status}")
+
+    st.markdown("#### Evidence and Impact Findings")
+    for finding in outlook.findings:
+        with st.expander(f"{finding.product_line_name} — {finding.segment_name}", expanded=True):
+            st.caption(
+                f"Product-line view: ${finding.annual_spend_exposed:,.0f} exposed; "
+                f"${finding.spend_requiring_validation:,.0f} requiring validation. "
+                "Shared Supply Relationship spend is deduplicated in the Outlook total."
+            )
+            for bundle in finding.evidence_bundles:
+                st.markdown(f"**{bundle.component_name} · {bundle.match_confidence}**")
+                st.caption(
+                    f"Synthetic relationship: {bundle.supplier_name} · {bundle.origin_name} · "
+                    f"${bundle.annual_spend:,.0f} · {bundle.measurement_period}"
+                )
+                st.markdown(f"**Policy evidence:** {bundle.policy_evidence.citation}")
+                st.write(bundle.policy_evidence.chunk_text)
+                st.markdown(f"**HTS scope evidence:** {bundle.hts_scope_evidence.citation}")
+                st.caption(
+                    "Exact covered HTSUS headings: "
+                    + ", ".join(bundle.hts_scope_evidence.hts_codes)
+                )
+                st.write(bundle.hts_scope_evidence.scope_text)
+                st.caption(
+                    "HTS evidence: "
+                    + ", ".join(
+                        (
+                            f"{item.hts_code} ({item.state}; {item.sourced_variant}; "
+                            f"{item.jurisdiction}; {item.schedule_period}) — "
+                            f"{item.provenance.source_citation}"
+                        )
+                        for item in bundle.classification_evidence
+                    )
+                )
+                st.caption(f"Scenario path: {bundle.scenario_path}")
+                st.write(f"Reasoning: {bundle.reasoning}")
+                st.write(f"Uncertainty: {bundle.uncertainty}")
+                st.markdown(f"[Open policy source]({bundle.policy_evidence.canonical_url})")
+
+    st.divider()
+    st.markdown("#### Recommended Actions")
+    if not outlook.recommended_actions:
+        st.info("No Recommended Actions are justified by this completed Outlook.")
+        return
+    for action in outlook.recommended_actions:
+        conditional = " — conditional" if action.is_conditional else ""
+        st.markdown(f"**{action.priority}. {action.title}{conditional}**")
+        st.caption("Evidence scope: " + ", ".join(action.evidence_relationship_keys))
+
+
+def render_featured_outlook(workflow: TariffWorkflow, notices) -> None:
+    featured = [notice for notice in notices if notice.is_featured]
+    if not featured:
+        st.info("The Featured Demonstration Notice has not been persisted yet.")
+        return
+    labels = {
+        f"{notice.source_identifier} — {notice.title}": notice.notice_id for notice in featured
+    }
+    selected_label = st.selectbox(
+        "Featured Demonstration Notice", list(labels), key="featured_demonstration_notice"
+    )
+    selected_notice_id = labels[selected_label]
+    outlook = workflow.impact_outlook(selected_notice_id)
+    if outlook is None and st.button("Generate Impact Outlook", use_container_width=True):
+        try:
+            workflow.analyze_policy_notice(
+                selected_notice_id,
+                embedding_service=EmbeddingService(),
+            )
+            st.success("Complete immutable Impact Outlook Snapshot is ready.")
+        except ValueError as error:
+            st.error(str(error))
+        except Exception:
+            logger.exception("Impact Outlook analysis failed")
+            st.error("Impact Outlook analysis failed. No partial snapshot was published.")
+
+    outlook = workflow.impact_outlook(selected_notice_id)
+    if outlook is not None:
+        render_impact_outlook(outlook)
+
+
 def run_app() -> None:
     try:
         repo = repository()
@@ -277,6 +376,13 @@ def run_app() -> None:
         )
     else:
         st.info("The Policy Inbox is ready for the first Federal Register notice.")
+
+    st.markdown("### Featured Demonstration Notice")
+    st.caption(
+        "Historical replay using the same persisted Policy Notice Snapshot, semantic evidence, "
+        "and Demonstration Scenario contracts as live analysis."
+    )
+    render_featured_outlook(workflow, notices)
 
     st.markdown("### Search cited policy evidence")
     st.caption("Semantic search retrieves passages from immutable Policy Notice Snapshots.")

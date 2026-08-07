@@ -16,9 +16,11 @@ DEFAULT_REQUIRED_TABLES = (
     "tariff.classification_assertions",
     "tariff.impact_outlook_snapshots",
     "tariff.impact_findings",
+    "tariff.impact_finding_evidence_bundles",
     "tariff.recommended_actions",
     "tariff.sourcing_reviews",
     "tariff.agent_runs",
+    "tariff.agent_tool_events",
     "tariff.agent_actions",
 )
 

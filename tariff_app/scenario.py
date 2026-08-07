@@ -6,6 +6,8 @@ from decimal import Decimal
 from .models import ProvenanceRecord, ScenarioSeedSummary
 
 SCENARIO_VERSION = "demonstration-2025-fy.v1"
+ENTERPRISE_DATA_VERSION = "demonstration-enterprise.v1"
+CLASSIFICATION_SCHEDULE_VERSION = "htsus-2025-09-30.v1"
 MEASUREMENT_PERIOD = "FY2025 ending 2025-09-30"
 PUBLIC_ENTERPRISE_SOURCE = ProvenanceRecord(
     label="Public source",
@@ -203,20 +205,20 @@ DEMONSTRATION_SCENARIO = DemonstrationScenario(
             "valve_body_trim_cn_validated",
             "valve_body_trim",
             "valve_body_trim_cn_01",
-            "primary-cn-01",
+            "verified-check-valve-cn-01",
             "US",
             "2025-09-30",
-            "8481.90.90.20",
+            "8481.30.10",
             "validated",
         ),
         ClassificationAssertionSeed(
             "valve_body_trim_us_validated",
             "valve_body_trim",
             "valve_body_trim_us_01",
-            "secondary-us-01",
+            "verified-check-valve-us-01",
             "US",
             "2025-09-30",
-            "8481.90.90.20",
+            "8481.30.10",
             "validated",
         ),
         ClassificationAssertionSeed(

@@ -23,6 +23,47 @@ def test_policy_notice_normalizes_hard_wraps_before_extracting_hts_references():
     assert len(notice.content_sha256) == 64
 
 
+def test_policy_notice_extracts_effective_date_from_hard_wrapped_source_when_metadata_is_absent():
+    notice = build_policy_notice(
+        source_identifier="2018-20610",
+        title="Notice of Modification of Section 301 Action",
+        agency="Office of the United States Trade Representative",
+        canonical_url="https://www.federalregister.gov/d/2018-20610",
+        publication_date="2018-09-21",
+        effective_date=None,
+        retrieved_at="2026-08-07T20:00:00+00:00",
+        raw_content=(
+            "Products of China entered for consumption on or after\n"
+            "September 24, 2018, shall be subject to the additional duty."
+        ),
+        raw_payload={"document_number": "2018-20610"},
+    )
+
+    assert notice.effective_date.isoformat() == "2018-09-24"
+    assert "after September 24, 2018" in notice.normalized_text
+
+
+def test_policy_notice_escapes_nul_before_content_hashing_and_chunking_for_postgresql_text():
+    notice = build_policy_notice(
+        source_identifier="2018-20610",
+        title="Notice of Modification of Section 301 Action",
+        agency="Office of the United States Trade Representative",
+        canonical_url="https://www.federalregister.gov/d/2018-20610",
+        publication_date="2018-09-21",
+        effective_date=None,
+        retrieved_at="2026-08-07T20:00:00+00:00",
+        raw_content="Products of China\x00 entered for consumption on or after\nSeptember 24, 2018.",
+        raw_payload={"document_number": "2018-20610"},
+    )
+
+    chunks = chunk_policy_notice(notice, chunk_size=120, chunk_overlap=0)
+
+    assert "\x00" not in notice.raw_content
+    assert "\x00" not in notice.normalized_text
+    assert notice.raw_content.count("\\0") == 1
+    assert all("\x00" not in chunk.chunk_text for chunk in chunks)
+
+
 def test_policy_chunks_are_ordered_overlapping_and_citable_without_tiny_heading_chunks():
     notice = build_policy_notice(
         source_identifier="2026-15975",
