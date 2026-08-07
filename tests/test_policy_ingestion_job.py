@@ -1,0 +1,96 @@
+from datetime import datetime, timezone
+
+from jobs.ingest_policy_notices import run_ingestion, transform_policy_notice
+from tariff_app.models import PolicyNoticeChunkRecord, PolicyNoticeSnapshot
+from tariff_app.policy import build_policy_notice
+
+NOW = datetime(2026, 8, 7, 20, 0, tzinfo=timezone.utc)
+
+
+def source_notice():
+    return build_policy_notice(
+        source_identifier="2026-15975",
+        title="Section 301 remedy notice",
+        agency="Office of the United States Trade Representative",
+        canonical_url="https://www.federalregister.gov/d/2026-15975",
+        publication_date="2026-08-01",
+        effective_date="2026-08-15",
+        retrieved_at=NOW,
+        raw_content="Scope of the Order\n\nSection 301 applies to HTSUS 9903.88.15.",
+        raw_payload={"document_number": "2026-15975"},
+    )
+
+
+class FakeFederalRegisterClient:
+    def fetch_document(self, document_number):
+        assert document_number == "2026-15975"
+        return source_notice()
+
+
+class FakeEmbeddingService:
+    endpoint_name = "databricks-gte-large-en"
+    model_version = "gte-large-v1"
+
+    def embed_texts(self, texts):
+        return [[float(index)] * 1024 for index, _text in enumerate(texts)]
+
+
+class FakeRepository:
+    def __init__(self):
+        self.embeddings = []
+
+    def upsert_policy_notice(self, notice):
+        return PolicyNoticeSnapshot(
+            notice_id=7,
+            source_identifier=notice.source_identifier,
+            title=notice.title,
+            agency=notice.agency,
+            canonical_url=notice.canonical_url,
+            publication_date=notice.publication_date,
+            retrieved_at=notice.retrieved_at,
+            content_sha256=notice.content_sha256,
+            is_featured=False,
+        )
+
+    def upsert_policy_chunks(self, *, notice_id, chunks):
+        return [
+            PolicyNoticeChunkRecord(
+                chunk_id=11 + chunk.chunk_index,
+                notice_id=notice_id,
+                chunk_index=chunk.chunk_index,
+                section_title=chunk.section_title,
+                chunk_text=chunk.chunk_text,
+                start_offset=chunk.start_offset,
+                end_offset=chunk.end_offset,
+                hts_codes=chunk.hts_codes,
+            )
+            for chunk in chunks
+        ]
+
+    def replace_policy_embeddings(self, records):
+        self.embeddings.extend(records)
+        return len(records)
+
+
+def test_policy_transformer_produces_citable_chunk_output_for_spark_to_persist():
+    transformed = transform_policy_notice(source_notice(), chunk_size=120, chunk_overlap=20)
+
+    assert transformed.notice.hts_codes == ("9903.88.15",)
+    assert transformed.chunks[0].citation("2026-15975").startswith("Federal Register 2026-15975")
+
+
+def test_ingestion_job_fetches_transforms_embeds_and_persists_one_live_notice():
+    repository = FakeRepository()
+
+    result = run_ingestion(
+        repository=repository,
+        federal_register_client=FakeFederalRegisterClient(),
+        embedding_service=FakeEmbeddingService(),
+        document_numbers=["2026-15975"],
+        transformer=lambda _spark, notice: transform_policy_notice(notice),
+        spark=object(),
+    )
+
+    assert result == {"documents": 1, "snapshots": 1, "chunks": 1, "embeddings": 1}
+    assert repository.embeddings[0].chunk_id == 11
+    assert repository.embeddings[0].model_version == "gte-large-v1"

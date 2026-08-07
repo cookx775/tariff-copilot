@@ -44,3 +44,22 @@ def test_workflow_facade_rejects_blank_diagnostic_messages():
         assert "message" in str(error).lower()
     else:
         raise AssertionError("Expected blank diagnostic message to be rejected")
+
+
+def test_workflow_facade_exposes_cited_policy_evidence_search():
+    class Repository:
+        def search_policy_evidence(self, embedding, *, top_k):
+            assert embedding == [0.5] * 1024
+            assert top_k == 2
+            return ["Section 301 passage"]
+
+    class Embeddings:
+        def embed_query(self, query):
+            assert query == "Which duty applies?"
+            return [0.5] * 1024
+
+    workflow = TariffWorkflow(Repository(), actor_email="manager@example.com")
+
+    assert workflow.search_policy_evidence(
+        "Which duty applies?", embedding_service=Embeddings(), top_k=2
+    ) == ["Section 301 passage"]

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -9,13 +10,17 @@ from .models import (
     ClassificationAssertionContext,
     DiagnosticRecord,
     ExposureContext,
+    PolicyEmbeddingRecord,
+    PolicyNoticeChunkRecord,
     PolicyNoticeSnapshot,
+    PolicySearchResult,
     ProductLineContext,
     ProvenanceRecord,
     ScenarioComponent,
     ScenarioSeedSummary,
     SupplyRelationshipContext,
 )
+from .policy import PolicyNotice, PolicyNoticeChunk
 from .scenario import (
     DEMONSTRATION_SCENARIO,
     MEASUREMENT_PERIOD,
@@ -29,8 +34,10 @@ SCHEMA_PATH = Path(__file__).resolve().parents[1] / "sql" / "schema.sql"
 DIAGNOSTIC_COLUMNS = "diagnostic_id, actor_email, message, created_at"
 NOTICE_COLUMNS = (
     "notice_id, source_identifier, title, agency, canonical_url, publication_date, "
-    "retrieved_at, content_sha256, is_featured"
+    "effective_date, retrieved_at, raw_content, normalized_text, source_provenance, "
+    "content_sha256, is_featured, analysis_state"
 )
+CHUNK_COLUMNS = "chunk_id, notice_id, chunk_index, section_title, chunk_text, start_offset, end_offset, hts_codes"
 INDEX_NAME_PATTERN = re.compile(r"^CREATE INDEX IF NOT EXISTS ([A-Za-z0-9_]+)", re.IGNORECASE)
 MAX_CONTEXT_COMPONENTS = 20
 
@@ -90,6 +97,144 @@ class TariffRepository:
             """
         )
         return [PolicyNoticeSnapshot.from_row(row) for row in rows]
+
+    def upsert_policy_notice(self, notice: PolicyNotice) -> PolicyNoticeSnapshot:
+        """Persist a new Policy Notice Snapshot or return the matching immutable version."""
+        params = (
+            notice.source_identifier,
+            notice.title,
+            notice.agency,
+            notice.canonical_url,
+            notice.publication_date,
+            notice.effective_date,
+            notice.retrieved_at,
+            notice.raw_content,
+            notice.normalized_text,
+            json.dumps(notice.raw_payload, sort_keys=True),
+            notice.source_provenance,
+            notice.content_sha256,
+            notice.is_featured,
+            notice.analysis_state,
+        )
+        with self._pool.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                INSERT INTO tariff.policy_notice_snapshots (
+                    source_identifier, title, agency, canonical_url, publication_date, effective_date,
+                    retrieved_at, raw_content, normalized_text, raw_payload, source_provenance,
+                    content_sha256, is_featured, analysis_state
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                ON CONFLICT (source_identifier, content_sha256) DO NOTHING
+                RETURNING {NOTICE_COLUMNS}
+                """,
+                params,
+            )
+            row = cursor.fetchone()
+            if row is None:
+                cursor.execute(
+                    f"""
+                    SELECT {NOTICE_COLUMNS}
+                    FROM tariff.policy_notice_snapshots
+                    WHERE source_identifier = %s AND content_sha256 = %s
+                    """,
+                    (notice.source_identifier, notice.content_sha256),
+                )
+                row = cursor.fetchone()
+        if row is None:
+            raise RuntimeError("Policy Notice Snapshot upsert did not return a persisted snapshot.")
+        return PolicyNoticeSnapshot.from_row(row)
+
+    def upsert_policy_chunks(
+        self, *, notice_id: int, chunks: Sequence[PolicyNoticeChunk]
+    ) -> list[PolicyNoticeChunkRecord]:
+        if not chunks:
+            return []
+        with self._pool.connection() as connection, connection.cursor() as cursor:
+            for chunk in chunks:
+                cursor.execute(
+                    """
+                    INSERT INTO tariff.policy_notice_chunks (
+                        notice_id, chunk_index, section_title, chunk_text, start_offset, end_offset,
+                        hts_codes
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+                    ON CONFLICT (notice_id, chunk_index) DO NOTHING
+                    """,
+                    (
+                        notice_id,
+                        chunk.chunk_index,
+                        chunk.section_title,
+                        chunk.chunk_text,
+                        chunk.start_offset,
+                        chunk.end_offset,
+                        json.dumps(chunk.hts_codes),
+                    ),
+                )
+            cursor.execute(
+                f"""
+                SELECT {CHUNK_COLUMNS}
+                FROM tariff.policy_notice_chunks
+                WHERE notice_id = %s
+                ORDER BY chunk_index
+                """,
+                (notice_id,),
+            )
+            rows = cursor.fetchall()
+        return [PolicyNoticeChunkRecord.from_row(row) for row in rows]
+
+    def replace_policy_embeddings(self, records: Sequence[PolicyEmbeddingRecord]) -> int:
+        if not records:
+            return 0
+        self._validate_policy_embeddings(records)
+        chunk_ids = sorted({record.chunk_id for record in records})
+        with self._pool.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM tariff.policy_notice_embeddings WHERE chunk_id = ANY(%s)",
+                (chunk_ids,),
+            )
+            for record in records:
+                cursor.execute(
+                    """
+                    INSERT INTO tariff.policy_notice_embeddings (
+                        chunk_id, embedding, endpoint_name, model_version
+                    ) VALUES (%s, %s::vector, %s, %s)
+                    """,
+                    (
+                        record.chunk_id,
+                        _vector_literal(record.embedding),
+                        record.endpoint_name,
+                        record.model_version,
+                    ),
+                )
+        return len(records)
+
+    def search_policy_evidence(
+        self, query_embedding: Sequence[float], *, top_k: int = 5
+    ) -> list[PolicySearchResult]:
+        self._validate_vector(query_embedding)
+        vector = _vector_literal(query_embedding)
+        rows = self._fetchall(
+            """
+            SELECT
+                n.notice_id,
+                n.source_identifier,
+                n.canonical_url,
+                n.publication_date,
+                c.chunk_id,
+                c.chunk_index,
+                c.section_title,
+                c.chunk_text,
+                c.start_offset,
+                c.end_offset,
+                1 - (e.embedding <=> %s::vector) AS similarity
+            FROM tariff.policy_notice_embeddings e
+            JOIN tariff.policy_notice_chunks c ON c.chunk_id = e.chunk_id
+            JOIN tariff.policy_notice_snapshots n ON n.notice_id = c.notice_id
+            ORDER BY e.embedding <=> %s::vector, c.chunk_id
+            LIMIT %s
+            """,
+            (vector, vector, max(1, min(int(top_k), 20))),
+        )
+        return [PolicySearchResult.from_row(row) for row in rows]
 
     def seed_demonstration_scenario(self) -> ScenarioSeedSummary:
         """Insert one immutable scenario version and its rows idempotently."""
@@ -477,3 +622,19 @@ class TariffRepository:
         with self._pool.connection() as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
             return cursor.fetchone()
+
+    @staticmethod
+    def _validate_policy_embeddings(records: Sequence[PolicyEmbeddingRecord]) -> None:
+        for record in records:
+            TariffRepository._validate_vector(record.embedding)
+            if not record.endpoint_name.strip() or not record.model_version.strip():
+                raise ValueError("Policy embedding endpoint and model version are required.")
+
+    @staticmethod
+    def _validate_vector(vector: Sequence[float]) -> None:
+        if len(vector) != 1_024:
+            raise ValueError("Policy embeddings must have exactly 1024 dimensions.")
+
+
+def _vector_literal(values: Iterable[float]) -> str:
+    return "[" + ",".join(str(float(value)) for value in values) + "]"

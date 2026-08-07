@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from .models import DiagnosticRecord, ExposureContext, PolicyNoticeSnapshot, ScenarioComponent
+from .retrieval import PolicyEvidenceRetriever
 
 
 def _validated_message(message: str) -> str:
@@ -27,6 +28,13 @@ class TariffWorkflow:
 
     def policy_inbox(self) -> list[PolicyNoticeSnapshot]:
         return self._repository.list_policy_notices()
+
+    def search_policy_evidence(
+        self, query: str, *, embedding_service: Any, top_k: int = 5
+    ) -> list[Any]:
+        return PolicyEvidenceRetriever(self._repository, embedding_service).search(
+            query, top_k=top_k
+        )
 
     def scenario_components(self) -> list[ScenarioComponent]:
         return self._repository.list_scenario_components()

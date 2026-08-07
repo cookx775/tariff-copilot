@@ -8,6 +8,7 @@ import streamlit as st
 
 from tariff_app.app_content import DISCLOSURE_COPY, DISCLOSURE_DETAILS
 from tariff_app.db import DatabaseConfigurationError, get_connection_pool
+from tariff_app.embeddings import EmbeddingService
 from tariff_app.identity import IdentityError, actor_email, forwarded_email
 from tariff_app.repository import TariffRepository
 from tariff_app.workflow import TariffWorkflow
@@ -172,6 +173,37 @@ def render_exposure_context(workflow: TariffWorkflow) -> None:
     )
 
 
+def render_policy_evidence_search(workflow: TariffWorkflow) -> None:
+    query = st.text_input(
+        "Search policy evidence",
+        key="policy_evidence_query",
+        placeholder="Which Section 301 duty applies to covered imports?",
+    )
+    if not st.button("Search cited policy evidence", key="policy_evidence_search"):
+        return
+    try:
+        results = workflow.search_policy_evidence(
+            query,
+            embedding_service=EmbeddingService(),
+        )
+    except ValueError as error:
+        st.info(str(error))
+        return
+    except Exception:
+        logger.exception("Policy evidence search failed")
+        st.error("Policy evidence search is temporarily unavailable. Check the App logs and retry.")
+        return
+
+    if not results:
+        st.info("No cited policy evidence matched that query.")
+        return
+    for result in results:
+        st.markdown(f"**{html.escape(result.citation)}**")
+        st.caption(f"Semantic similarity: {result.similarity:.0%}")
+        st.write(result.chunk_text)
+        st.markdown(f"[Open source notice]({result.canonical_url})")
+
+
 def run_app() -> None:
     try:
         repo = repository()
@@ -235,6 +267,7 @@ def run_app() -> None:
                     "Title": notice.title,
                     "Agency": notice.agency,
                     "Published": notice.publication_date,
+                    "Analysis state": notice.analysis_state.replace("_", " ").title(),
                     "Featured": "Historical replay" if notice.is_featured else "Current",
                 }
                 for notice in notices
@@ -245,6 +278,9 @@ def run_app() -> None:
     else:
         st.info("The Policy Inbox is ready for the first Federal Register notice.")
 
+    st.markdown("### Search cited policy evidence")
+    st.caption("Semantic search retrieves passages from immutable Policy Notice Snapshots.")
+    render_policy_evidence_search(workflow)
 
     st.markdown("### Demonstration Scenario")
     st.caption(
