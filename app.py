@@ -11,6 +11,8 @@ from tariff_app.db import DatabaseConfigurationError, get_connection_pool
 from tariff_app.embeddings import EmbeddingService
 from tariff_app.identity import IdentityError, actor_email, forwarded_email
 from tariff_app.repository import TariffRepository
+from tariff_app.sourcing_review import RetryableReviewWriteFailure
+from tariff_app.sourcing_review_repository import SourcingReviewRepository
 from tariff_app.workflow import TariffWorkflow
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -204,7 +206,7 @@ def render_policy_evidence_search(workflow: TariffWorkflow) -> None:
         st.markdown(f"[Open source notice]({result.canonical_url})")
 
 
-def render_impact_outlook(outlook) -> None:
+def render_impact_outlook(outlook, workflow: TariffWorkflow, *, actor: str) -> None:
     """Render a persisted result only; all analysis remains behind the workflow facade."""
     st.markdown("### Impact Outlook")
     st.caption(
@@ -270,9 +272,152 @@ def render_impact_outlook(outlook) -> None:
         conditional = " — conditional" if action.is_conditional else ""
         st.markdown(f"**{action.priority}. {action.title}{conditional}**")
         st.caption("Evidence scope: " + ", ".join(action.evidence_relationship_keys))
+        if st.button(
+            "Open Sourcing Review",
+            key=f"open_sourcing_review_{outlook.outlook_id}_{action.action_key}",
+        ):
+            st.session_state["sourcing_review_selection"] = {
+                "outlook_id": outlook.outlook_id,
+                "action_key": action.action_key,
+                "action_title": action.title,
+            }
+            st.session_state.pop("sourcing_review_confirmation", None)
+            st.session_state.pop("sourcing_review_failure", None)
+
+    render_sourcing_review_confirmation(workflow, actor=actor)
 
 
-def render_featured_outlook(workflow: TariffWorkflow, notices) -> None:
+def render_sourcing_review_confirmation(workflow: TariffWorkflow, *, actor: str) -> None:
+    selection = st.session_state.get("sourcing_review_selection")
+    if not selection:
+        return
+    st.divider()
+    st.markdown("#### Confirm Sourcing Review")
+    confirmation = st.session_state.get("sourcing_review_confirmation")
+    if confirmation is None:
+        with st.form("prepare_sourcing_review_confirmation"):
+            objective = st.text_input(
+                "Objective",
+                value=f"Investigate: {selection['action_title']}",
+                max_chars=2_000,
+            )
+            owner_email = st.text_input("Owner", value=actor, max_chars=320)
+            prepare = st.form_submit_button("Review exact confirmation payload")
+        if st.button("Cancel", key="cancel_sourcing_review_draft"):
+            st.session_state.pop("sourcing_review_selection", None)
+            st.rerun()
+        if not prepare:
+            return
+        try:
+            confirmation = workflow.prepare_sourcing_review_confirmation(
+                source_outlook_id=selection["outlook_id"],
+                action_key=selection["action_key"],
+                objective=objective,
+                owner_email=owner_email,
+            )
+            st.session_state["sourcing_review_confirmation"] = confirmation
+        except ValueError as error:
+            st.error(str(error))
+            return
+        except Exception:
+            logger.exception("Sourcing Review confirmation preparation failed")
+            st.error("The exact confirmation payload could not be prepared. No Review was created.")
+            return
+
+    payload = confirmation.reviewed_payload()
+    st.write(f"**Recommendation:** {payload['recommendation']}")
+    st.write(f"**Objective:** {payload['objective']}")
+    st.write(f"**Owner:** {payload['owner_email']}")
+    st.write(f"**Initial status:** {payload['initial_status']}")
+    st.caption(f"Source Impact Outlook Snapshot: {payload['source_outlook_id']}")
+    st.dataframe(
+        [
+            {
+                "Product line": link["product_line_name"],
+                "Component": link["component_name"],
+                "Supplier": link["supplier_name"],
+                "Match Confidence": link["match_confidence"],
+                "Uncertainty": link["uncertainty"],
+            }
+            for link in payload["scope_links"]
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
+    confirm_col, decline_col = st.columns(2)
+    if confirm_col.button("Confirm and open Sourcing Review", use_container_width=True):
+        try:
+            result = workflow.confirm_sourcing_review(confirmation)
+        except ValueError as error:
+            st.error(str(error))
+            return
+        except Exception:
+            logger.exception("Sourcing Review confirmation failed")
+            st.error("The confirmed write failed safely. No partial Review was published.")
+            return
+        if isinstance(result, RetryableReviewWriteFailure):
+            st.session_state["sourcing_review_failure"] = result
+            st.error(result.message)
+        else:
+            st.session_state.pop("sourcing_review_selection", None)
+            st.session_state.pop("sourcing_review_confirmation", None)
+            st.query_params["review_id"] = str(result.review.review_id)
+            st.rerun()
+    if decline_col.button("Decline", use_container_width=True):
+        try:
+            workflow.decline_sourcing_review(confirmation)
+        except Exception:
+            logger.exception("Sourcing Review decline failed")
+            st.error("The confirmation decision could not be recorded.")
+            return
+        st.session_state.pop("sourcing_review_selection", None)
+        st.session_state.pop("sourcing_review_confirmation", None)
+        st.info("Sourcing Review confirmation declined. No Review was created.")
+
+    failure = st.session_state.get("sourcing_review_failure")
+    if failure is not None and st.button("Retry unchanged write"):
+        try:
+            st.session_state["sourcing_review_confirmation"] = (
+                workflow.retry_sourcing_review_confirmation(
+                    failed_agent_run_id=failure.failed_agent_run_id
+                )
+            )
+            st.session_state.pop("sourcing_review_failure", None)
+            st.rerun()
+        except Exception:
+            logger.exception("Sourcing Review retry preparation failed")
+            st.error("A fresh approval for the unchanged payload could not be prepared.")
+
+
+def render_sourcing_review_detail(workflow: TariffWorkflow, review_id: int) -> None:
+    review = workflow.sourcing_review(review_id)
+    st.markdown("### Sourcing Review")
+    st.caption(f"Durable Review {review.review_id} · {review.status}")
+    st.write(f"**Recommendation:** {review.recommendation}")
+    st.write(f"**Objective:** {review.objective}")
+    st.write(f"**Owner:** {review.owner_email}")
+    st.caption(f"Source Impact Outlook Snapshot: {review.source_outlook_id}")
+    if review.scope_links:
+        st.dataframe(
+            [
+                {
+                    "Product line": link.product_line_name,
+                    "Component": link.component_name,
+                    "Supplier": link.supplier_name,
+                    "Match Confidence": link.match_confidence,
+                    "Uncertainty": link.uncertainty,
+                }
+                for link in review.scope_links
+            ],
+            use_container_width=True,
+            hide_index=True,
+        )
+    if st.button("Back to Policy Inbox"):
+        st.query_params.clear()
+        st.rerun()
+
+
+def render_featured_outlook(workflow: TariffWorkflow, notices, *, actor: str) -> None:
     featured = [notice for notice in notices if notice.is_featured]
     if not featured:
         st.info("The Featured Demonstration Notice has not been persisted yet.")
@@ -300,7 +445,7 @@ def render_featured_outlook(workflow: TariffWorkflow, notices) -> None:
 
     outlook = workflow.impact_outlook(selected_notice_id)
     if outlook is not None:
-        render_impact_outlook(outlook)
+        render_impact_outlook(outlook, workflow, actor=actor)
 
 
 def run_app() -> None:
@@ -337,7 +482,22 @@ def run_app() -> None:
         st.info("Set LOCAL_USER_EMAIL locally or type an identity in the sidebar to continue.")
         st.stop()
 
-    workflow = TariffWorkflow(repo, actor_email=actor)
+    workflow = TariffWorkflow(
+        repo,
+        actor_email=actor,
+        sourcing_review_store=SourcingReviewRepository(get_connection_pool()),
+    )
+
+    review_id = st.query_params.get("review_id")
+    if review_id:
+        try:
+            render_sourcing_review_detail(workflow, int(review_id))
+        except (TypeError, ValueError):
+            st.error("The Sourcing Review link is invalid.")
+        except Exception:
+            logger.exception("Sourcing Review detail could not be loaded")
+            st.error("The Sourcing Review could not be loaded.")
+        return
 
     st.markdown(
         """
@@ -382,7 +542,24 @@ def run_app() -> None:
         "Historical replay using the same persisted Policy Notice Snapshot, semantic evidence, "
         "and Demonstration Scenario contracts as live analysis."
     )
-    render_featured_outlook(workflow, notices)
+    render_featured_outlook(workflow, notices, actor=actor)
+
+    st.markdown("### Sourcing Reviews")
+    try:
+        reviews = workflow.sourcing_reviews()
+    except Exception:
+        logger.exception("Sourcing Review index could not be loaded")
+        st.info("Sourcing Reviews are temporarily unavailable.")
+    else:
+        if not reviews:
+            st.info("No Sourcing Reviews have been opened yet.")
+        for review in reviews:
+            if st.button(
+                f"{review.objective} — {review.status}",
+                key=f"sourcing_review_{review.review_id}",
+            ):
+                st.query_params["review_id"] = str(review.review_id)
+                st.rerun()
 
     st.markdown("### Search cited policy evidence")
     st.caption("Semantic search retrieves passages from immutable Policy Notice Snapshots.")

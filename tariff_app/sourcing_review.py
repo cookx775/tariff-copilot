@@ -311,7 +311,7 @@ class SourcingReviewStore(Protocol):
 
 
 class SourcingReviewService:
-    """Ticket-owned confirmation boundary; it has no analysis or shared-facade dependency."""
+    """Explicit Sourcing Review boundary with no analysis or shared-facade dependency."""
 
     def __init__(
         self,

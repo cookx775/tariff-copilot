@@ -18,6 +18,12 @@ from .outlook import (
 )
 from .retrieval import PolicyEvidenceRetriever
 from .scenario import CLASSIFICATION_SCHEDULE_VERSION, ENTERPRISE_DATA_VERSION, SCENARIO_VERSION
+from .sourcing_review import (
+    DEFAULT_APPROVAL_TTL,
+    SourcingReviewConfirmation,
+    SourcingReviewDeclined,
+    SourcingReviewService,
+)
 
 
 def _validated_message(message: str) -> str:
@@ -32,13 +38,33 @@ def _validated_message(message: str) -> str:
 class TariffWorkflow:
     """The single application boundary for current and future user workflows."""
 
-    def __init__(self, repository: Any, *, actor_email: str, clock: Any = None):
+    def __init__(
+        self,
+        repository: Any,
+        *,
+        actor_email: str,
+        clock: Any = None,
+        sourcing_review_store: Any = None,
+        review_token_factory: Any = None,
+        review_approval_ttl: Any = DEFAULT_APPROVAL_TTL,
+    ):
         normalized_actor = actor_email.strip()
         if not normalized_actor:
             raise ValueError("Workflow actor identity is required.")
         self._repository = repository
         self._actor_email = normalized_actor
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._sourcing_review_service = (
+            SourcingReviewService(
+                sourcing_review_store,
+                actor_email=normalized_actor,
+                clock=self._clock,
+                token_factory=review_token_factory,
+                approval_ttl=review_approval_ttl,
+            )
+            if sourcing_review_store is not None
+            else None
+        )
 
     def policy_inbox(self) -> list[PolicyNoticeSnapshot]:
         return self._repository.list_policy_notices()
@@ -163,6 +189,61 @@ class TariffWorkflow:
     def impact_outlook(self, notice_id: int) -> ImpactOutlookSnapshot | None:
         """Open the persisted snapshot only; this read never performs analysis."""
         return self._repository.get_complete_impact_outlook_for_notice(notice_id)
+
+    def prepare_sourcing_review_confirmation(
+        self,
+        *,
+        source_outlook_id: int,
+        action_key: str,
+        objective: str | None = None,
+        owner_email: str | None = None,
+    ) -> SourcingReviewConfirmation:
+        return self._review_service().prepare_confirmation(
+            source_outlook_id=source_outlook_id,
+            action_key=action_key,
+            objective=objective,
+            owner_email=owner_email,
+        )
+
+    def confirm_sourcing_review(
+        self,
+        confirmation: SourcingReviewConfirmation,
+        *,
+        reviewed_payload: Any = None,
+    ) -> Any:
+        return self._review_service().confirm(
+            confirmation,
+            reviewed_payload=reviewed_payload,
+        )
+
+    def decline_sourcing_review(
+        self,
+        confirmation: SourcingReviewConfirmation,
+        *,
+        reviewed_payload: Any = None,
+    ) -> SourcingReviewDeclined:
+        return self._review_service().decline(
+            confirmation,
+            reviewed_payload=reviewed_payload,
+        )
+
+    def retry_sourcing_review_confirmation(
+        self, *, failed_agent_run_id: int
+    ) -> SourcingReviewConfirmation:
+        return self._review_service().retry_confirmation(
+            failed_agent_run_id=failed_agent_run_id
+        )
+
+    def sourcing_review(self, review_id: int) -> Any:
+        return self._review_service().get_review(review_id)
+
+    def sourcing_reviews(self) -> list[Any]:
+        return self._review_service().list_reviews()
+
+    def _review_service(self) -> SourcingReviewService:
+        if self._sourcing_review_service is None:
+            raise RuntimeError("Sourcing Review persistence is not configured.")
+        return self._sourcing_review_service
 
     def _record_failed_analysis_run(
         self,

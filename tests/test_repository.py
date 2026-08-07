@@ -132,6 +132,8 @@ def test_initialize_skips_existing_indexes_when_table_ownership_is_reused():
             {"index_name": "tariff.scenario_classifications_component_idx"},
             {"index_name": "tariff.impact_outlook_notice_idx"},
             {"index_name": "tariff.impact_evidence_finding_idx"},
+            {"index_name": "tariff.sourcing_review_approvals_actor_idx"},
+            {"index_name": "tariff.sourcing_reviews_created_idx"},
             {"index_name": "tariff.agent_runs_notice_idx"},
         ]
     )
