@@ -17,7 +17,7 @@ DEFAULT_REQUIRED_ARTIFACTS = (
     "tariff_app/",
     "tariff_app/retrieval.py",
     "tariff_app/agent.py",
-    "tariff_app/scenario.py",
+    "tariff_app/seed.py",
     "tests/",
     "README.md",
     "evidence/evidence-manifest.json",
@@ -46,6 +46,10 @@ EMAIL_PATTERN = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNO
 SECRET_PATTERNS = (
     re.compile(
         r"\b(?:password|passwd|secret(?:_key)?|api[_-]?key|access[_-]?token)\s*[:=]\s*(?:['\"][^'\"]+['\"]|[A-Za-z0-9+/=_-]{16,})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\btoken\s*[:=]\s*(?:['\"][^'\"]+['\"]|[A-Za-z0-9+/=_-]{16,})",
         re.IGNORECASE,
     ),
     re.compile(r"\b(?:ghp|github_pat|sk)-[A-Za-z0-9_-]{12,}\b"),

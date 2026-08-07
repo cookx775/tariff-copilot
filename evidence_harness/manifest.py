@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .runs import verify_run_file
+
 
 @dataclass(frozen=True)
 class EvidenceRequirement:
@@ -119,25 +121,45 @@ def _matches(root: Path, artifact: str) -> list[str]:
 def _requirement_manifest(root: Path, requirement: EvidenceRequirement) -> dict[str, Any]:
     found: list[str] = []
     missing: list[str] = []
+    invalid: list[str] = []
     for artifact in requirement.required_artifacts:
         matches = _matches(root, artifact)
-        if matches:
-            found.extend(matches)
+        valid_matches = []
+        for match in matches:
+            match_path = root / match
+            if artifact.startswith("evidence/fixtures/"):
+                try:
+                    fixture = json.loads(match_path.read_text())
+                except (OSError, json.JSONDecodeError):
+                    invalid.append(f"{match} (invalid fixture)")
+                    continue
+                if str(fixture.get("fixture_status", "")).startswith("pending-"):
+                    invalid.append(f"{match} (placeholder fixture)")
+                    continue
+            if artifact.startswith("evidence/runs/") and not verify_run_file(match_path).ok:
+                invalid.append(f"{match} (invalid run record)")
+                continue
+            valid_matches.append(match)
+        if valid_matches:
+            found.extend(valid_matches)
         else:
             missing.append(artifact)
     found = sorted(set(found))
+    invalid = sorted(set(invalid))
+    incomplete = bool(missing or invalid)
     return {
         "key": requirement.key,
         "name": requirement.name,
-        "status": "verified" if not missing else "missing",
+        "status": "verified" if not incomplete else "missing",
         "required_artifacts": list(requirement.required_artifacts),
         "found_artifacts": found,
         "missing_artifacts": missing,
+        "invalid_artifacts": invalid,
         "verification_steps": list(requirement.verification_steps),
         "evidence_claim": (
             "Verified only when every required artifact is present."
-            if not missing
-            else "Not verified; missing artifacts are listed explicitly."
+            if not incomplete
+            else "Not verified; missing or invalid artifacts are listed explicitly."
         ),
     }
 
@@ -171,10 +193,13 @@ def build_evidence_manifest(
     missing_evidence = [
         {
             "requirement": entry["key"],
-            "missing_artifacts": entry["missing_artifacts"],
+            "missing_artifacts": [
+                *entry["missing_artifacts"],
+                *entry["invalid_artifacts"],
+            ],
         }
         for entry in entries
-        if entry["missing_artifacts"]
+        if entry["missing_artifacts"] or entry["invalid_artifacts"]
     ]
     missing_evidence.extend(
         {

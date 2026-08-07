@@ -5,5 +5,11 @@
   "canonical_url": "https://www.federalregister.gov/d/2026-15975",
   "raw_content": null,
   "content_sha256": null,
+  "expected_outcome": {
+    "annual_spend_exposed": 6000000,
+    "spend_requiring_validation": 3000000,
+    "affected_product_lines": 2,
+    "outlook_status": "Action recommended"
+  },
   "note": "Ticket 9 must replace this placeholder with the pinned Federal Register snapshot."
 }

@@ -2,8 +2,15 @@
   "fixture_status": "pending-live-capture",
   "source_identifier": "negative-l-lysine",
   "title": "Pinned negative L-Lysine policy notice",
-  "canonical_url": "",
+  "canonical_url": null,
   "raw_content": null,
   "content_sha256": null,
+  "expected_outcome": {
+    "annual_spend_exposed": 0,
+    "spend_requiring_validation": 0,
+    "affected_product_lines": 0,
+    "recommended_actions": 0,
+    "outlook_status": "No actionable exposure identified"
+  },
   "note": "Ticket 9 must replace this placeholder with the pinned Federal Register snapshot."
 }

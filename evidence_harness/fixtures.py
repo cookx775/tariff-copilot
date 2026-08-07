@@ -11,7 +11,7 @@ class PolicyNoticeFixture:
 
     source_identifier: str
     title: str
-    canonical_url: str
+    canonical_url: str | None
     fixture_status: str
     raw_content: str | None
     expected_outcome: Mapping[str, Any]
@@ -59,7 +59,7 @@ def fixture_contract() -> FixtureContract:
         negative=PolicyNoticeFixture(
             source_identifier="negative-l-lysine",
             title="Pinned negative L-Lysine policy notice",
-            canonical_url="",
+            canonical_url=None,
             fixture_status="pending-live-capture",
             raw_content=None,
             expected_outcome={

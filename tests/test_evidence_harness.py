@@ -8,7 +8,7 @@ import pytest
 
 from evidence_harness.adapters import EvidenceTestDependencies
 from evidence_harness.fixtures import fixture_contract
-from evidence_harness.manifest import build_evidence_manifest
+from evidence_harness.manifest import EvidenceRequirement, build_evidence_manifest
 from evidence_harness.package import (
     PackagePolicy,
     SecretScanError,
@@ -30,6 +30,15 @@ def test_fixture_contract_covers_featured_and_negative_outcomes():
         "No actionable exposure identified"
     )
     assert contract.featured.fixture_status == "pending-live-capture"
+    root = Path(__file__).parents[1]
+    featured_json = json.loads(
+        (root / "evidence" / "fixtures" / "featured_policy_notice_snapshot.json").read_text()
+    )
+    negative_json = json.loads(
+        (root / "evidence" / "fixtures" / "negative_policy_notice_snapshot.json").read_text()
+    )
+    assert featured_json["expected_outcome"] == dict(contract.featured.expected_outcome)
+    assert negative_json["expected_outcome"] == dict(contract.negative.expected_outcome)
 
 
 def test_schema_verifier_passes_only_when_static_and_observed_contracts_are_present():
@@ -85,6 +94,30 @@ def test_manifest_is_deterministic_and_marks_missing_evidence_explicitly(tmp_pat
     json.dumps(first, sort_keys=True)
 
 
+def test_manifest_does_not_verify_placeholders_or_invalid_run_records(tmp_path: Path):
+    fixture = tmp_path / "evidence" / "fixtures" / "featured.json"
+    fixture.parent.mkdir(parents=True)
+    fixture.write_text('{"fixture_status": "pending-live-capture"}\n')
+    run = tmp_path / "evidence" / "runs" / "federal-register.json"
+    run.parent.mkdir(parents=True)
+    run.write_text('{"status": "failed"}\n')
+    requirement = EvidenceRequirement(
+        key="test",
+        name="Test requirement",
+        required_artifacts=(
+            "evidence/fixtures/featured.json",
+            "evidence/runs/federal-register.json",
+        ),
+        verification_steps=("Inspect the redacted run.",),
+    )
+
+    entry = build_evidence_manifest(tmp_path, requirements=(requirement,))["requirements"][0]
+
+    assert entry["status"] == "missing"
+    assert "evidence/fixtures/featured.json (placeholder fixture)" in entry["invalid_artifacts"]
+    assert "evidence/runs/federal-register.json (invalid run record)" in entry["invalid_artifacts"]
+
+
 def test_run_record_requires_observable_success_metadata():
     valid = {
         "run_id": "run-123",
@@ -119,7 +152,10 @@ def test_injected_dependencies_can_be_passed_to_a_workflow_factory():
     assert dependencies.build_workflow(factory) == captured
     assert captured["client"] is dependencies.client
     assert captured["repository"] is dependencies.repository
+    assert captured["embeddings"] is dependencies.embeddings
+    assert captured["model_output"] is dependencies.model_output
     assert captured["identity"] == "manager@example.com"
+    assert captured["clock"] is dependencies.clock
 
 
 def test_packaging_is_deterministic_and_scans_content(tmp_path: Path):
@@ -149,6 +185,13 @@ def test_packaging_rejects_secrets_and_personal_contact_addresses(tmp_path: Path
 
     assert "README.md" in str(error.value)
     assert "password" not in str(error.value)
+
+    (tmp_path / "README.md").write_text("tok" + "en = 'abc123'\n")
+    with pytest.raises(SecretScanError):
+        validate_submission_tree(
+            tmp_path,
+            policy=PackagePolicy(required_files=("README.md",)),
+        )
 
 
 def test_packaging_reports_fixture_placeholders_as_unverified(tmp_path: Path):
@@ -196,6 +239,7 @@ def test_repository_readme_and_smoke_checklist_are_explicit_skeletons():
     root = Path(__file__).parents[1]
     readme = (root / "README.md").read_text()
     smoke = (root / "docs" / "deployment-smoke.md").read_text()
+    manifest = json.loads((root / "evidence" / "evidence-manifest.json").read_text())
 
     for phrase in (
         "Business problem and user",
@@ -214,3 +258,6 @@ def test_repository_readme_and_smoke_checklist_are_explicit_skeletons():
         "Failed",
     ):
         assert phrase in smoke
+    assert len(manifest["requirements"]) == 5
+    assert all(entry["verification_steps"] for entry in manifest["requirements"])
+    assert all("missing_artifacts" in entry for entry in manifest["requirements"])
