@@ -95,7 +95,7 @@ for work owned by the remaining implementation tickets.
 | Interactive frontend | Deployed URL plus smoke record covering reload persistence |
 | Agent retrieval and write | Bounded Agent Run plus confirmed durable Sourcing Review |
 
-Run `python -m evidence_harness verify-schema --ownership-record evidence/runs/schema-ownership.json`
+Run `python -m evidence_harness verify-schema --ownership-record evidence/schema-ownership.json`
 only when the ownership and access result has been captured from the deployed database. The
 command fails when schema or runtime evidence is absent; it never infers database grants from
 checked-in SQL.

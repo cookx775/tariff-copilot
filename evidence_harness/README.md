@@ -7,7 +7,7 @@ Run from the repository root:
 
 ```sh
 python -m evidence_harness manifest --output evidence/evidence-manifest.json
-python -m evidence_harness verify-schema --ownership-evidence
+python -m evidence_harness verify-schema --ownership-record evidence/schema-ownership.json
 python -m evidence_harness verify-package
 python -m evidence_harness build-zip --output /tmp/tariff-copilot-submission.zip
 ```

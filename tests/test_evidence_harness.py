@@ -118,6 +118,38 @@ def test_manifest_does_not_verify_placeholders_or_invalid_run_records(tmp_path: 
     assert "evidence/runs/federal-register.json (invalid run record)" in entry["invalid_artifacts"]
 
 
+def test_release_manifest_validates_run_url_screenshot_and_test_contents(tmp_path: Path):
+    run = tmp_path / "evidence" / "runs" / "successful.json"
+    run.parent.mkdir(parents=True)
+    run.write_text(
+        json.dumps(
+            {
+                "run_id": "run-1",
+                "kind": "test",
+                "status": "success",
+                "started_at": "2026-08-07T20:00:00+00:00",
+                "completed_at": "2026-08-07T20:01:00+00:00",
+                "source": "local",
+                "artifact": "evidence/test-suite.txt",
+            }
+        )
+    )
+    (tmp_path / "evidence" / "deployed-url.txt").write_text("pending\n")
+    (tmp_path / "evidence" / "screenshots").mkdir(parents=True)
+    (tmp_path / "evidence" / "screenshots" / "note.txt").write_text("not an image")
+    (tmp_path / "evidence" / "test-suite.txt").write_text("\n")
+
+    release = {
+        item["key"]: item
+        for item in build_evidence_manifest(tmp_path, requirements=())["release_evidence"]
+    }
+
+    assert release["run_identifiers"]["status"] == "present"
+    assert release["deployed_url"]["status"] == "missing"
+    assert release["screenshots"]["status"] == "missing"
+    assert release["test_evidence"]["status"] == "missing"
+
+
 def test_run_record_requires_observable_success_metadata():
     valid = {
         "run_id": "run-123",
@@ -160,7 +192,7 @@ def test_injected_dependencies_can_be_passed_to_a_workflow_factory():
 
 def test_packaging_is_deterministic_and_scans_content(tmp_path: Path):
     (tmp_path / "README.md").write_text("safe\n")
-    policy = PackagePolicy(required_files=("README.md",), max_file_bytes=100)
+    policy = PackagePolicy(required_artifacts=("README.md",), max_file_bytes=100)
 
     report = validate_submission_tree(tmp_path, policy=policy)
     assert report.ok
@@ -180,7 +212,7 @@ def test_packaging_rejects_secrets_and_personal_contact_addresses(tmp_path: Path
     with pytest.raises(SecretScanError) as error:
         validate_submission_tree(
             tmp_path,
-            policy=PackagePolicy(required_files=("README.md",)),
+            policy=PackagePolicy(required_artifacts=("README.md",)),
         )
 
     assert "README.md" in str(error.value)
@@ -190,7 +222,14 @@ def test_packaging_rejects_secrets_and_personal_contact_addresses(tmp_path: Path
     with pytest.raises(SecretScanError):
         validate_submission_tree(
             tmp_path,
-            policy=PackagePolicy(required_files=("README.md",)),
+            policy=PackagePolicy(required_artifacts=("README.md",)),
+        )
+
+    (tmp_path / "run.sh").write_text("tok" + "en = 'abc123'\n")
+    with pytest.raises(SecretScanError):
+        validate_submission_tree(
+            tmp_path,
+            policy=PackagePolicy(required_artifacts=("README.md",)),
         )
 
 
@@ -201,7 +240,7 @@ def test_packaging_reports_fixture_placeholders_as_unverified(tmp_path: Path):
 
     report = validate_submission_tree(
         tmp_path,
-        policy=PackagePolicy(required_files=("evidence/fixtures/notice.json",)),
+        policy=PackagePolicy(required_artifacts=("evidence/fixtures/notice.json",)),
     )
 
     assert not report.ok
@@ -213,7 +252,7 @@ def test_packaging_does_not_treat_an_empty_screenshot_directory_as_evidence(tmp_
 
     report = validate_submission_tree(
         tmp_path,
-        policy=PackagePolicy(required_files=("evidence/screenshots/",)),
+        policy=PackagePolicy(required_artifacts=("evidence/screenshots/",)),
     )
 
     assert report.missing_artifacts == ("evidence/screenshots/",)
@@ -223,7 +262,7 @@ def test_packaging_rejects_oversized_files_and_env_files(tmp_path: Path):
     (tmp_path / "README.md").write_text("x" * 101)
     report = validate_submission_tree(
         tmp_path,
-        policy=PackagePolicy(required_files=("README.md",), max_file_bytes=100),
+        policy=PackagePolicy(required_artifacts=("README.md",), max_file_bytes=100),
     )
     assert report.oversized_files == ("README.md",)
 
@@ -231,7 +270,7 @@ def test_packaging_rejects_oversized_files_and_env_files(tmp_path: Path):
     with pytest.raises(SecretScanError):
         validate_submission_tree(
             tmp_path,
-            policy=PackagePolicy(required_files=("README.md",), max_file_bytes=200),
+            policy=PackagePolicy(required_artifacts=("README.md",), max_file_bytes=200),
         )
 
 

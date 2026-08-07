@@ -93,6 +93,19 @@ RELEASE_EVIDENCE = (
     ("test_evidence", "evidence/test-suite.txt"),
 )
 
+SNAPSHOT_FIELDS = (
+    "source_identifier",
+    "title",
+    "canonical_url",
+    "publication_date",
+    "effective_date",
+    "retrieved_at",
+    "raw_content",
+    "normalized_text",
+    "source_provenance",
+    "content_sha256",
+)
+
 
 def _matches(root: Path, artifact: str) -> list[str]:
     if any(character in artifact for character in "*?["):
@@ -118,6 +131,26 @@ def _matches(root: Path, artifact: str) -> list[str]:
     return []
 
 
+def _fixture_errors(path: Path) -> list[str]:
+    try:
+        fixture = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return ["invalid fixture"]
+    if str(fixture.get("fixture_status", "")).startswith("pending-"):
+        return ["placeholder fixture"]
+    return [f"missing {field}" for field in SNAPSHOT_FIELDS if not fixture.get(field)]
+
+
+def _validated_artifact(root: Path, artifact: str, match: str) -> str | None:
+    path = root / match
+    if artifact.startswith("evidence/fixtures/"):
+        errors = _fixture_errors(path)
+        return f"{match} ({'; '.join(errors)})" if errors else None
+    if artifact.startswith("evidence/runs/") and not verify_run_file(path).ok:
+        return f"{match} (invalid run record)"
+    return None
+
+
 def _requirement_manifest(root: Path, requirement: EvidenceRequirement) -> dict[str, Any]:
     found: list[str] = []
     missing: list[str] = []
@@ -126,18 +159,10 @@ def _requirement_manifest(root: Path, requirement: EvidenceRequirement) -> dict[
         matches = _matches(root, artifact)
         valid_matches = []
         for match in matches:
-            match_path = root / match
-            if artifact.startswith("evidence/fixtures/"):
-                try:
-                    fixture = json.loads(match_path.read_text())
-                except (OSError, json.JSONDecodeError):
-                    invalid.append(f"{match} (invalid fixture)")
-                    continue
-                if str(fixture.get("fixture_status", "")).startswith("pending-"):
-                    invalid.append(f"{match} (placeholder fixture)")
-                    continue
-            if artifact.startswith("evidence/runs/") and not verify_run_file(match_path).ok:
-                invalid.append(f"{match} (invalid run record)")
+            root / match
+            validation_error = _validated_artifact(root, artifact, match)
+            if validation_error:
+                invalid.append(validation_error)
                 continue
             valid_matches.append(match)
         if valid_matches:
@@ -168,13 +193,46 @@ def _release_evidence_manifest(root: Path) -> list[dict[str, Any]]:
     entries = []
     for key, artifact in RELEASE_EVIDENCE:
         found = _matches(root, artifact)
+        invalid: list[str] = []
+        valid: list[str] = []
+        for match in found:
+            path = root / match
+            if key == "run_identifiers":
+                validation_error = _validated_artifact(root, artifact, match)
+            elif key == "deployed_url":
+                try:
+                    valid_url = path.read_text().strip().startswith("https://")
+                except OSError:
+                    valid_url = False
+                validation_error = None if valid_url else f"{match} (invalid deployed URL)"
+            elif key == "test_evidence":
+                try:
+                    has_content = bool(path.read_text().strip())
+                except OSError:
+                    has_content = False
+                validation_error = None if has_content else f"{match} (empty test evidence)"
+            else:
+                valid_extensions = {".png", ".jpg", ".jpeg", ".webp"}
+                if path.is_dir():
+                    has_image = any(
+                        candidate.is_file() and candidate.suffix.lower() in valid_extensions
+                        for candidate in path.rglob("*")
+                    )
+                    validation_error = None if has_image else f"{match} (no screenshots)"
+                else:
+                    validation_error = f"{match} (invalid screenshots path)"
+            if validation_error:
+                invalid.append(validation_error)
+            else:
+                valid.append(match)
         entries.append(
             {
                 "key": key,
                 "expected_artifact": artifact,
-                "status": "present" if found else "missing",
-                "found_artifacts": found,
-                "missing_artifacts": [] if found else [artifact],
+                "status": "present" if valid and not invalid else "missing",
+                "found_artifacts": valid,
+                "missing_artifacts": [] if valid and not invalid else [artifact],
+                "invalid_artifacts": invalid,
             }
         )
     return entries

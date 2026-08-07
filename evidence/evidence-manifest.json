@@ -11,10 +11,10 @@
     {"missing_artifacts": ["evidence/test-suite.txt"], "requirement": "release:test_evidence"}
   ],
   "release_evidence": [
-    {"key": "screenshots", "expected_artifact": "evidence/screenshots/", "status": "missing", "found_artifacts": [], "missing_artifacts": ["evidence/screenshots/"]},
-    {"key": "run_identifiers", "expected_artifact": "evidence/runs/*.json", "status": "missing", "found_artifacts": [], "missing_artifacts": ["evidence/runs/*.json"]},
-    {"key": "deployed_url", "expected_artifact": "evidence/deployed-url.txt", "status": "missing", "found_artifacts": [], "missing_artifacts": ["evidence/deployed-url.txt"]},
-    {"key": "test_evidence", "expected_artifact": "evidence/test-suite.txt", "status": "missing", "found_artifacts": [], "missing_artifacts": ["evidence/test-suite.txt"]}
+    {"key": "screenshots", "expected_artifact": "evidence/screenshots/", "status": "missing", "found_artifacts": [], "missing_artifacts": ["evidence/screenshots/"], "invalid_artifacts": []},
+    {"key": "run_identifiers", "expected_artifact": "evidence/runs/*.json", "status": "missing", "found_artifacts": [], "missing_artifacts": ["evidence/runs/*.json"], "invalid_artifacts": []},
+    {"key": "deployed_url", "expected_artifact": "evidence/deployed-url.txt", "status": "missing", "found_artifacts": [], "missing_artifacts": ["evidence/deployed-url.txt"], "invalid_artifacts": []},
+    {"key": "test_evidence", "expected_artifact": "evidence/test-suite.txt", "status": "missing", "found_artifacts": [], "missing_artifacts": ["evidence/test-suite.txt"], "invalid_artifacts": []}
   ],
   "requirement_count": 5,
   "requirements": [

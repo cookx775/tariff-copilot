@@ -31,14 +31,20 @@ DEFAULT_REQUIRED_ARTIFACTS = (
 
 TEXT_SUFFIXES = {
     ".cfg",
+    ".conf",
+    ".csv",
     ".html",
     ".ini",
     ".json",
     ".md",
     ".py",
     ".sql",
+    ".sh",
     ".txt",
     ".toml",
+    ".tsv",
+    ".properties",
+    ".xml",
     ".yaml",
     ".yml",
 }
@@ -60,7 +66,6 @@ SECRET_PATTERNS = (
 @dataclass(frozen=True)
 class PackagePolicy:
     required_artifacts: tuple[str, ...] = DEFAULT_REQUIRED_ARTIFACTS
-    required_files: tuple[str, ...] | None = None
     max_file_bytes: int = 10 * 1024 * 1024
     allowed_email_domains: tuple[str, ...] = (
         "example.com",
@@ -75,11 +80,6 @@ class PackagePolicy:
         ".pytest_cache",
         ".ruff_cache",
     )
-
-    def artifacts(self) -> tuple[str, ...]:
-        """Return the configured required paths; ``required_files`` is a compatibility alias."""
-
-        return self.required_files if self.required_files is not None else self.required_artifacts
 
 
 @dataclass(frozen=True)
@@ -182,7 +182,7 @@ def validate_submission_tree(
         raise PackageValidationError("Submission root is not a directory.")
 
     missing = tuple(
-        artifact for artifact in policy.artifacts() if not _artifact_present(root, artifact)
+        artifact for artifact in policy.required_artifacts if not _artifact_present(root, artifact)
     )
     oversized: list[str] = []
     forbidden: list[str] = []
