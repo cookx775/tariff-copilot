@@ -13,7 +13,7 @@ The operating user accountable for evaluating input-cost exposure and initiating
 _Avoid_: Buyer, procurement user, executive user
 
 **Sourcing Review**:
-A tracked investigation into an exposed purchased component that is assigned to an owner for follow-up and resolution.
+A durable, assigned investigation opened from one Recommended Action to resolve an exposed purchased component or material uncertainty; it may cover multiple product lines that share the same exposure. Opening one is the MVP agent's only operational write and requires separate user confirmation, while analytical snapshots and audit records are persisted automatically.
 _Avoid_: Ticket, task
 
 **Impact Outlook**:
@@ -97,7 +97,7 @@ The minimum support for an Impact Finding: a cited policy passage, HTS classific
 _Avoid_: Sources, references
 
 **Recommended Action**:
-One evidence-linked sourcing response selected from the approved playbook: validate classification or origin, request supplier confirmation or a quote, evaluate alternate sourcing, review inventory or pre-buy feasibility, assess product pricing, or open a Sourcing Review. An Impact Outlook presents at most three prioritized actions and never pads the list when fewer actions are justified.
+One evidence-linked sourcing response selected from the approved playbook: validate classification or origin, request supplier confirmation or a quote, evaluate alternate sourcing, review inventory or pre-buy feasibility, or assess product pricing. An Impact Outlook presents at most three prioritized actions and never pads the list when fewer actions are justified; opening a Sourcing Review is the workflow operation for tracking an action, not an action itself.
 _Avoid_: AI advice, suggestion
 
 **No Actionable Exposure Identified**:
@@ -111,3 +111,7 @@ _Avoid_: Severity, risk rating
 **Processing State**:
 The lifecycle state of an Impact Outlook analysis: **Queued**, **Analyzing**, **Complete**, or **Failed**. Outlook Status exists only for a Complete analysis; Failed processing is retryable and must never be represented as No actionable exposure identified.
 _Avoid_: Outlook status, impact status
+
+**Agent Run**:
+An append-only audit record for one agent analysis or operational-write attempt, linking its actor, timestamps, versioned inputs and tools, structured events, outcome, and any retry predecessor. It references immutable snapshots and retains evidence-backed explanations but excludes hidden model reasoning.
+_Avoid_: Chat history, chain of thought, application log
