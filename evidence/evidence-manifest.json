@@ -23,40 +23,50 @@
       "name": "Data pipeline in Spark",
       "status": "missing",
       "required_artifacts": ["jobs/*.py", "evidence/runs/spark-ingest.json"],
+      "found_artifacts": [],
       "missing_artifacts": ["jobs/*.py", "evidence/runs/spark-ingest.json"],
-      "evidence_claim": "Not verified; missing artifacts are listed explicitly."
+      "evidence_claim": "Not verified; missing artifacts are listed explicitly.",
+      "verification_steps": ["Run the Git-sourced Spark task and retain its successful run record.", "Confirm raw, normalized, and chunked notice outputs are represented in the run evidence."]
     },
     {
       "key": "third_party_api",
       "name": "At least one third-party API",
       "status": "missing",
       "required_artifacts": ["evidence/fixtures/featured_policy_notice_snapshot.json", "evidence/runs/federal-register.json"],
+      "found_artifacts": ["evidence/fixtures/featured_policy_notice_snapshot.json"],
       "missing_artifacts": ["evidence/runs/federal-register.json"],
-      "evidence_claim": "Not verified; missing artifacts are listed explicitly."
+      "evidence_claim": "Not verified; missing artifacts are listed explicitly.",
+      "verification_steps": ["Verify the run record names the live Federal Register source and source identifier.", "Verify the pinned snapshot retains URL, retrieval time, raw payload, and fingerprint."]
     },
     {
       "key": "unstructured_retrieval",
       "name": "Processing of unstructured data and semantic retrieval",
       "status": "missing",
       "required_artifacts": ["tariff_app/retrieval.py", "evidence/fixtures/featured_policy_notice_snapshot.json", "evidence/runs/semantic-retrieval.json", "sql/schema.sql"],
+      "found_artifacts": ["evidence/fixtures/featured_policy_notice_snapshot.json", "sql/schema.sql"],
       "missing_artifacts": ["tariff_app/retrieval.py", "evidence/runs/semantic-retrieval.json"],
-      "evidence_claim": "Not verified; missing artifacts are listed explicitly."
+      "evidence_claim": "Not verified; missing artifacts are listed explicitly.",
+      "verification_steps": ["Run the semantic query and retain the cited Section 301 passage in its evidence record.", "Verify the schema report passes vector(1024), HNSW, and cosine-operator checks."]
     },
     {
       "key": "deployed_frontend",
       "name": "Interactive Databricks App frontend",
       "status": "missing",
       "required_artifacts": ["app.py", "docs/deployment-smoke.md", "evidence/deployed-url.txt", "evidence/runs/deployed-app.json"],
+      "found_artifacts": ["app.py", "docs/deployment-smoke.md"],
       "missing_artifacts": ["evidence/deployed-url.txt", "evidence/runs/deployed-app.json"],
-      "evidence_claim": "Not verified; missing artifacts are listed explicitly."
+      "evidence_claim": "Not verified; missing artifacts are listed explicitly.",
+      "verification_steps": ["Run the deployment smoke checklist against the deployed app.", "Verify Policy Inbox, Impact Outlook, and durable Sourcing Review behavior after reload."]
     },
     {
       "key": "agent_retrieval_and_write",
       "name": "AI agent that retrieves evidence and performs a durable write",
       "status": "missing",
       "required_artifacts": ["tariff_app/agent.py", "tariff_app/workflow.py", "evidence/runs/agent-write.json", "sql/schema.sql"],
+      "found_artifacts": ["sql/schema.sql", "tariff_app/workflow.py"],
       "missing_artifacts": ["tariff_app/agent.py", "evidence/runs/agent-write.json"],
-      "evidence_claim": "Not verified; missing artifacts are listed explicitly."
+      "evidence_claim": "Not verified; missing artifacts are listed explicitly.",
+      "verification_steps": ["Verify the Agent Run contains bounded retrieval events and an explicitly confirmed write.", "Reload the app and confirm the Sourcing Review remains durable in Lakebase."]
     }
   ],
   "verified_requirement_count": 0,
