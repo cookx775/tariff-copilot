@@ -56,3 +56,31 @@ This record contains no credentials, tokens, database passwords, or personal con
 22 passed
 ruff check (changed Python files): passed
 ```
+
+## Full capstone scoring smoke checklist
+
+This checklist is intentionally separate from the completed foundation check above. Each step
+must be performed against the deployed app and recorded in `evidence/runs/`; an unchecked step
+is missing evidence, not a passing assumption.
+
+1. Confirm the persistent illustrative-scenario disclosure distinguishes public Mueller Water
+   Products facts, public policy/HTS evidence, synthetic Demonstration Scenario records, and
+   model-generated analysis.
+2. Confirm the Policy Inbox separates the Featured Demonstration Notice historical replay from
+   current live notices and retains each Policy Notice Snapshot after reload.
+3. Run the Featured Demonstration Notice and verify the Impact Outlook leads with the executive
+   impact brief, Annual Spend Exposed, Spend Requiring Validation, cited evidence, and up to
+   three Recommended Actions.
+4. Open the evidence detail and verify each Impact Finding has its policy passage, HTS evidence,
+   Demonstration Scenario path, Match Confidence, Impact Window, and uncertainty.
+5. Select one stored Recommended Action and inspect the exact confirmation payload before any
+   write. Confirm only the objective and owner are editable.
+6. Confirm the Sourcing Review explicitly, verify the Agent Run records bounded retrieval and
+   the confirmed write, and land on durable Review detail.
+7. Reload the app and reopen the Review from the Sourcing Reviews index or direct detail path.
+8. Exercise the negative or failure-safe path when retained: a successful zero-match result must
+   say **No Actionable Exposure Identified**, while retrieval, validation, or persistence failure
+   must say **Failed** and never appear as no exposure.
+
+Record for each step: UTC timestamp, redacted deployment identifier, result, and artifact path.
+Never paste credentials, tokens, cookies, or personal contact addresses into this file.
