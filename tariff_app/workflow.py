@@ -24,6 +24,7 @@ from .sourcing_review import (
     DEFAULT_APPROVAL_TTL,
     SourcingReviewConfirmation,
     SourcingReviewDeclined,
+    SourcingReviewDraft,
     SourcingReviewService,
 )
 
@@ -207,6 +208,14 @@ class TariffWorkflow:
         """Open the persisted snapshot only; this read never performs analysis."""
         return self._repository.get_complete_impact_outlook_for_notice(notice_id)
 
+    def impact_outlook_history(self, notice_id: int) -> list[ImpactOutlookSnapshot]:
+        """Read persisted predecessor/successor snapshots without triggering analysis."""
+        return self._repository.list_impact_outlooks_for_notice(notice_id)
+
+    def impact_outlook_snapshot(self, outlook_id: int) -> ImpactOutlookSnapshot:
+        """Open one exact immutable snapshot selected from history."""
+        return self._repository.get_impact_outlook_snapshot(outlook_id)
+
     def prepare_sourcing_review_confirmation(
         self,
         *,
@@ -220,6 +229,15 @@ class TariffWorkflow:
             action_key=action_key,
             objective=objective,
             owner_email=owner_email,
+        )
+
+    def sourcing_review_draft(
+        self, *, source_outlook_id: int, action_key: str
+    ) -> SourcingReviewDraft:
+        """Preview immutable recommendation/evidence beside the editable confirmation fields."""
+        return self._review_service().review_draft(
+            source_outlook_id=source_outlook_id,
+            action_key=action_key,
         )
 
     def confirm_sourcing_review(

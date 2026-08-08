@@ -348,6 +348,15 @@ class SourcingReviewService:
             owner_email=owner_email or self._actor_email,
         )
 
+    def review_draft(
+        self, *, source_outlook_id: int, action_key: str
+    ) -> SourcingReviewDraft:
+        """Resolve the read-only recommendation and evidence before issuing an approval."""
+        return self._repository.resolve_review_draft(
+            source_outlook_id=source_outlook_id,
+            action_key=action_key,
+        )
+
     def confirm(
         self,
         confirmation: SourcingReviewConfirmation,

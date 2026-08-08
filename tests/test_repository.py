@@ -326,6 +326,46 @@ def test_completed_outlook_lookup_requires_the_full_current_input_version_tuple(
     )
 
 
+def test_outlook_history_returns_persisted_successors_in_sequence_order():
+    predecessor = completed_outlook_row()
+    successor = {
+        **completed_outlook_row(),
+        "outlook_id": 32,
+        "successor_of_outlook_id": 31,
+        "reanalysis_sequence": 1,
+    }
+    cursor = FakeCursor(
+        [
+            [predecessor, successor],
+            [],
+            [],
+            [],
+            [],
+            [],
+            [],
+        ]
+    )
+
+    history = TariffRepository(FakePool(cursor)).list_impact_outlooks_for_notice(7)
+
+    assert [item.outlook_id for item in history] == [31, 32]
+    assert history[1].successor_of_outlook_id == 31
+    query, params = cursor.executions[0]
+    assert "ORDER BY reanalysis_sequence, created_at, outlook_id" in query
+    assert params == (7,)
+
+
+def test_exact_outlook_lookup_loads_a_persisted_snapshot_without_using_notice_latest():
+    cursor = FakeCursor([completed_outlook_row(), [], [], []])
+
+    outlook = TariffRepository(FakePool(cursor)).get_impact_outlook_snapshot(31)
+
+    assert outlook.outlook_id == 31
+    query, params = cursor.executions[0]
+    assert "WHERE outlook_id = %s" in query
+    assert params == (31,)
+
+
 def completed_outlook_row():
     return {
         "outlook_id": 31,

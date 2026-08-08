@@ -303,6 +303,39 @@ class TariffRepository:
             return None
         return self._load_impact_outlook(row)
 
+    def list_impact_outlooks_for_notice(self, notice_id: int) -> list[ImpactOutlookSnapshot]:
+        """Return immutable completed snapshots in predecessor-to-successor order."""
+        if notice_id <= 0:
+            raise ValueError("A Policy Notice Snapshot identifier must be positive.")
+        rows = self._fetchall(
+            f"""
+            SELECT {OUTLOOK_COLUMNS}
+            FROM tariff.impact_outlook_snapshots
+            WHERE notice_id = %s
+              AND processing_state = 'Complete'
+            ORDER BY reanalysis_sequence, created_at, outlook_id
+            """,
+            (notice_id,),
+        )
+        return [self._load_impact_outlook(row) for row in rows]
+
+    def get_impact_outlook_snapshot(self, outlook_id: int) -> ImpactOutlookSnapshot:
+        """Load one exact immutable snapshot rather than resolving a notice's latest result."""
+        if outlook_id <= 0:
+            raise ValueError("An Impact Outlook Snapshot identifier must be positive.")
+        row = self._fetchone(
+            f"""
+            SELECT {OUTLOOK_COLUMNS}
+            FROM tariff.impact_outlook_snapshots
+            WHERE outlook_id = %s
+              AND processing_state = 'Complete'
+            """,
+            (outlook_id,),
+        )
+        if row is None:
+            raise RecordNotFound(f"Impact Outlook Snapshot {outlook_id} does not exist.")
+        return self._load_impact_outlook(row)
+
     def persist_impact_outlook(
         self, *, outlook: ImpactOutlookSnapshot, agent_run: AgentRun
     ) -> ImpactOutlookSnapshot:

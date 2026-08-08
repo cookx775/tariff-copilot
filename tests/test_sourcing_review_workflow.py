@@ -107,6 +107,16 @@ class ReviewStore:
         return [91]
 
 
+class OutlookHistoryStore:
+    def list_impact_outlooks_for_notice(self, notice_id):
+        assert notice_id == 17
+        return [31, 32]
+
+    def get_impact_outlook_snapshot(self, outlook_id):
+        assert outlook_id == 31
+        return "persisted outlook"
+
+
 def _workflow(store: ReviewStore) -> TariffWorkflow:
     return TariffWorkflow(
         object(),
@@ -121,6 +131,10 @@ def test_workflow_facade_drives_explicit_confirmation_and_detail_navigation():
     store = ReviewStore()
     workflow = _workflow(store)
 
+    draft = workflow.sourcing_review_draft(
+        source_outlook_id=31,
+        action_key=_draft().action_key,
+    )
     confirmation = workflow.prepare_sourcing_review_confirmation(
         source_outlook_id=31,
         action_key=_draft().action_key,
@@ -130,6 +144,7 @@ def test_workflow_facade_drives_explicit_confirmation_and_detail_navigation():
     result = workflow.confirm_sourcing_review(confirmation)
 
     assert store.confirm_actor == "manager@example.com"
+    assert draft == _draft()
     assert result.review.review_id == 91
     assert result.navigation.destination == "sourcing_review_detail"
     assert workflow.sourcing_review(91) == 91
@@ -157,6 +172,13 @@ def test_workflow_rejects_review_operations_when_persistence_is_not_configured()
 
     with pytest.raises(RuntimeError, match="not configured"):
         workflow.sourcing_reviews()
+
+
+def test_workflow_exposes_persisted_outlook_successor_history_without_reanalysis():
+    workflow = TariffWorkflow(OutlookHistoryStore(), actor_email="manager@example.com")
+
+    assert workflow.impact_outlook_history(17) == [31, 32]
+    assert workflow.impact_outlook_snapshot(31) == "persisted outlook"
 
 
 def test_integrated_schema_contains_review_tables_and_static_constraints():
