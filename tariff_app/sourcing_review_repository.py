@@ -28,8 +28,15 @@ REVIEW_OPERATION = "open_sourcing_review"
 REVIEW_MODEL_VERSION = "confirmation-boundary.v1"
 REVIEW_PROMPT_VERSION = "sourcing-review-confirmation.v1"
 REVIEW_COLUMNS = """
-    review_id, source_outlook_id, recommended_action_id, objective, owner_email,
-    status, evidence_scope_sha256, created_by_email, created_at
+    r.review_id AS review_id,
+    r.source_outlook_id AS source_outlook_id,
+    r.recommended_action_id AS recommended_action_id,
+    r.objective AS objective,
+    r.owner_email AS owner_email,
+    r.status AS status,
+    r.evidence_scope_sha256 AS evidence_scope_sha256,
+    r.created_by_email AS created_by_email,
+    r.created_at AS created_at
 """
 
 

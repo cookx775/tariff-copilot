@@ -198,6 +198,18 @@ def test_resolve_draft_requires_complete_versioned_outlook_and_stored_action_sco
     assert scope_params == (41, 31)
 
 
+def test_review_reads_qualify_columns_shared_by_joined_tables():
+    cursor = FakeCursor([[review_row()]])
+    repository = SourcingReviewRepository(FakePool(cursor))
+
+    reviews = repository.list_reviews()
+
+    assert reviews[0].review_id == 91
+    query, _params = cursor.executions[0]
+    assert "r.source_outlook_id AS source_outlook_id" in query
+    assert "r.recommended_action_id AS recommended_action_id" in query
+
+
 def test_issue_approval_persists_only_a_token_hash_and_server_canonical_payload():
     cursor = FakeCursor()
     repository = SourcingReviewRepository(FakePool(cursor))
