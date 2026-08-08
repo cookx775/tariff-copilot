@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
-from collections.abc import Sequence
+from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Optional
@@ -252,13 +253,38 @@ def run_demonstration_notice_ingestion(
     )
 
 
-def main(argv: Optional[list[str]] = None) -> None:
+def parse_arguments(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Ingest Federal Register policy notices into Lakebase"
     )
     parser.add_argument("--document-number", action="append", dest="document_numbers")
     parser.add_argument("--seed-demonstration-notices", action="store_true")
-    args = parser.parse_args(argv)
+    parser.add_argument("--pg-host")
+    parser.add_argument("--pg-database")
+    parser.add_argument("--pg-user")
+    parser.add_argument("--endpoint-name")
+    parser.add_argument("--embedding-endpoint")
+    return parser.parse_args(argv)
+
+
+def apply_runtime_configuration(
+    arguments: argparse.Namespace,
+    environment: MutableMapping[str, str] = os.environ,
+) -> None:
+    """Apply non-secret serverless task parameters before clients are constructed."""
+    values = {
+        "PGHOST": arguments.pg_host,
+        "PGDATABASE": arguments.pg_database,
+        "PGUSER": arguments.pg_user,
+        "ENDPOINT_NAME": arguments.endpoint_name,
+        "DATABRICKS_EMBEDDING_ENDPOINT": arguments.embedding_endpoint,
+    }
+    environment.update({name: value for name, value in values.items() if value})
+
+
+def main(argv: Optional[list[str]] = None) -> None:
+    args = parse_arguments(argv)
+    apply_runtime_configuration(args)
 
     from pyspark.sql import SparkSession
 

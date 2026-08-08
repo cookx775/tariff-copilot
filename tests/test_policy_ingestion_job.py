@@ -4,6 +4,8 @@ from evidence_harness.fixtures import fixture_contract
 from jobs.ingest_policy_notices import (
     FEATURED_DEMONSTRATION_DOCUMENT,
     NEGATIVE_DEMONSTRATION_DOCUMENT,
+    apply_runtime_configuration,
+    parse_arguments,
     run_demonstration_notice_ingestion,
     run_ingestion,
     transform_policy_notice,
@@ -12,6 +14,37 @@ from tariff_app.models import PolicyNoticeChunkRecord, PolicyNoticeSnapshot
 from tariff_app.policy import build_policy_notice
 
 NOW = datetime(2026, 8, 7, 20, 0, tzinfo=timezone.utc)
+
+
+def test_serverless_task_arguments_supply_non_secret_runtime_configuration():
+    arguments = parse_arguments(
+        [
+            "--seed-demonstration-notices",
+            "--pg-host",
+            "lakebase.example.databricks.com",
+            "--pg-database",
+            "databricks_postgres",
+            "--pg-user",
+            "runner@example.com",
+            "--endpoint-name",
+            "projects/example/branches/production/endpoints/primary",
+            "--embedding-endpoint",
+            "databricks-gte-large-en",
+        ]
+    )
+    environment = {}
+
+    apply_runtime_configuration(arguments, environment)
+
+    assert arguments.seed_demonstration_notices is True
+    assert environment == {
+        "PGHOST": "lakebase.example.databricks.com",
+        "PGDATABASE": "databricks_postgres",
+        "PGUSER": "runner@example.com",
+        "ENDPOINT_NAME": "projects/example/branches/production/endpoints/primary",
+        "DATABRICKS_EMBEDDING_ENDPOINT": "databricks-gte-large-en",
+    }
+    assert "PGPASSWORD" not in environment
 
 
 def source_notice():

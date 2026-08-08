@@ -22,3 +22,10 @@ def test_disclosure_contract_distinguishes_public_synthetic_and_model_generated_
     assert "synthetic" in DISCLOSURE_COPY.lower()
     assert "model-generated" in DISCLOSURE_DETAILS.lower()
     assert "historical replay" in DISCLOSURE_DETAILS.lower()
+
+
+def test_app_runtime_configures_the_verified_embedding_endpoint():
+    app_config = (Path(__file__).parents[1] / "app.yaml").read_text()
+
+    assert "DATABRICKS_EMBEDDING_ENDPOINT" in app_config
+    assert "databricks-gte-large-en" in app_config
