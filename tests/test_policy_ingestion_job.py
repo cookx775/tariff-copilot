@@ -29,7 +29,7 @@ def test_serverless_task_arguments_supply_non_secret_runtime_configuration():
             "--endpoint-name",
             "projects/example/branches/production/endpoints/primary",
             "--embedding-endpoint",
-            "databricks-gte-large-en",
+            "databricks-qwen3-embedding-0-6b",
         ]
     )
     environment = {}
@@ -42,7 +42,7 @@ def test_serverless_task_arguments_supply_non_secret_runtime_configuration():
         "PGDATABASE": "databricks_postgres",
         "PGUSER": "runner@example.com",
         "ENDPOINT_NAME": "projects/example/branches/production/endpoints/primary",
-        "DATABRICKS_EMBEDDING_ENDPOINT": "databricks-gte-large-en",
+        "DATABRICKS_EMBEDDING_ENDPOINT": "databricks-qwen3-embedding-0-6b",
     }
     assert "PGPASSWORD" not in environment
 

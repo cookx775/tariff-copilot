@@ -28,4 +28,4 @@ def test_app_runtime_configures_the_verified_embedding_endpoint():
     app_config = (Path(__file__).parents[1] / "app.yaml").read_text()
 
     assert "DATABRICKS_EMBEDDING_ENDPOINT" in app_config
-    assert "databricks-gte-large-en" in app_config
+    assert "databricks-qwen3-embedding-0-6b" in app_config
