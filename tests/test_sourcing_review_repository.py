@@ -265,6 +265,11 @@ def test_confirm_consumes_approval_creates_review_links_and_auditable_agent_run(
         params for query, params in cursor.executions if "INSERT INTO tariff.sourcing_reviews" in query
     )
     assert review_insert[4] == "Open"
+    review_insert_query = next(
+        query for query, _params in cursor.executions if "INSERT INTO tariff.sourcing_reviews" in query
+    )
+    returning_clause = review_insert_query.partition("RETURNING")[2]
+    assert "r." not in returning_clause
 
 
 def test_duplicate_confirmation_returns_existing_review_without_another_agent_run():

@@ -28,6 +28,10 @@ REVIEW_OPERATION = "open_sourcing_review"
 REVIEW_MODEL_VERSION = "confirmation-boundary.v1"
 REVIEW_PROMPT_VERSION = "sourcing-review-confirmation.v1"
 REVIEW_COLUMNS = """
+    review_id, source_outlook_id, recommended_action_id, objective, owner_email,
+    status, evidence_scope_sha256, created_by_email, created_at
+"""
+QUALIFIED_REVIEW_COLUMNS = """
     r.review_id AS review_id,
     r.source_outlook_id AS source_outlook_id,
     r.recommended_action_id AS recommended_action_id,
@@ -296,7 +300,7 @@ class SourcingReviewRepository:
             raise ValueError("A Sourcing Review identifier must be positive.")
         row = self._fetchone(
             f"""
-            SELECT {REVIEW_COLUMNS}, o.notice_id AS source_notice_id,
+            SELECT {QUALIFIED_REVIEW_COLUMNS}, o.notice_id AS source_notice_id,
                    a.action_key, a.title AS recommendation
             FROM tariff.sourcing_reviews r
             JOIN tariff.impact_outlook_snapshots o ON o.outlook_id = r.source_outlook_id
@@ -337,7 +341,7 @@ class SourcingReviewRepository:
     def list_reviews(self) -> list[SourcingReview]:
         rows = self._fetchall(
             f"""
-            SELECT {REVIEW_COLUMNS}, o.notice_id AS source_notice_id,
+            SELECT {QUALIFIED_REVIEW_COLUMNS}, o.notice_id AS source_notice_id,
                    a.action_key, a.title AS recommendation
             FROM tariff.sourcing_reviews r
             JOIN tariff.impact_outlook_snapshots o ON o.outlook_id = r.source_outlook_id
