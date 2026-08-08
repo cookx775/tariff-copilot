@@ -473,10 +473,37 @@ def test_featured_workflow_publishes_complete_deduplicated_evidence_backed_snaps
             },
         ),
         ("existing", 17, {}),
-        ("semantic", 17, 8, [0.5] * 1024),
+        ("semantic", 17, 10, [0.5] * 1024),
         ("context", ("check_valve_cartridge", "valve_body_trim")),
     ]
     assert embeddings.queries == ["Section 301 China Annex A HTS policy scope and effective date"]
+
+
+def test_featured_workflow_retrieves_required_effective_passage_ranked_ninth():
+    class ProductionRankedRepository(FeaturedRepository):
+        def search_policy_evidence(self, embedding, *, top_k, notice_id):
+            self.calls.append(("semantic", notice_id, top_k, embedding))
+            ranked = [
+                replace(
+                    section_301_evidence(),
+                    chunk_id=300 + rank,
+                    chunk_index=rank,
+                    chunk_text=f"Related Section 301 notice passage ranked {rank}.",
+                    similarity=1 - rank / 100,
+                )
+                for rank in range(1, 11)
+            ]
+            ranked[3] = section_301_evidence()
+            ranked[8] = effective_date_evidence()
+            return ranked[:top_k]
+
+    repository = ProductionRankedRepository()
+    workflow = TariffWorkflow(repository, actor_email="manager@example.com", clock=lambda: NOW)
+
+    outlook = workflow.analyze_policy_notice(17, embedding_service=Embeddings())
+
+    assert outlook.processing_state == "Complete"
+    assert ("semantic", 17, 10, [0.5] * 1024) in repository.calls
 
 
 def test_reopening_existing_outlook_returns_persisted_snapshot_without_recalculation():

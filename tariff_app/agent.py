@@ -15,6 +15,8 @@ from .outlook import (
 )
 from .retrieval import PolicyEvidenceRetriever
 
+POLICY_EVIDENCE_TOP_K = 10
+
 
 class AnalysisAttemptError(ValueError):
     def __init__(
@@ -120,7 +122,7 @@ class ImpactOutlookAgent:
         evidence = PolicyEvidenceRetriever(self._repository, self._embedding_service).search(
             query,
             notice_id=notice.notice_id,
-            top_k=8,
+            top_k=POLICY_EVIDENCE_TOP_K,
         )
         if not evidence:
             raise ValueError("Find Exposure Candidates returned no policy evidence.")
@@ -130,7 +132,7 @@ class ImpactOutlookAgent:
             event_index=2,
             tool_name="find_exposure_candidates",
             tool_version=TOOL_VERSIONS["find_exposure_candidates"],
-            input_summary={"notice_id": notice.notice_id, "top_k": 8},
+            input_summary={"notice_id": notice.notice_id, "top_k": POLICY_EVIDENCE_TOP_K},
             output_summary={"policy_chunk_ids": [item.chunk_id for item in evidence]},
             occurred_at=now,
         )
