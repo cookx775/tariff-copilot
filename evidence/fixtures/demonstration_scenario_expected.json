@@ -1,0 +1,16 @@
+{
+  "fixture_status": "pending-seed-load",
+  "expected_counts": {
+    "segments": 2,
+    "product_lines": 3,
+    "components": 5,
+    "bom_relationships": 6,
+    "suppliers": 5,
+    "supply_relationships": 6,
+    "countries_of_origin": 4,
+    "classification_assertions": 8
+  },
+  "expected_annual_spend": 24000000,
+  "shared_component_name": "China valve-body and trim assembly",
+  "note": "Ticket 10 must replace this contract placeholder with idempotent seed evidence."
+}

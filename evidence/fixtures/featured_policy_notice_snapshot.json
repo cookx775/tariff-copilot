@@ -1,0 +1,25 @@
+{
+  "fixture_status": "pinned-official-raw",
+  "source_identifier": "2018-20610",
+  "title": "Notice of Modification of Section 301 Action: China's Acts, Policies, and Practices Related to Technology Transfer, Intellectual Property, and Innovation",
+  "agency": "Office of the United States Trade Representative",
+  "canonical_url": "https://www.federalregister.gov/d/2018-20610",
+  "is_featured": true,
+  "publication_date": "2018-09-21",
+  "effective_date": "2018-09-24",
+  "retrieved_at": "2026-08-07T21:12:34+00:00",
+  "raw_content_path": "pinned_raw/2018-20610.txt.b64",
+  "raw_content_encoding": "base64",
+  "content_sha256": "67049a1dfe94649b2f8c690086d23acd6b35e195b07ea29b842353383001bd03",
+  "source_content_sha256": "67049a1dfe94649b2f8c690086d23acd6b35e195b07ea29b842353383001bd03",
+  "raw_source_url": "https://www.federalregister.gov/documents/full_text/text/2018/09/21/2018-20610.txt",
+  "metadata_source_url": "https://www.federalregister.gov/api/v1/documents/2018-20610.json",
+  "source_provenance": "Pinned verbatim Federal Register raw-text response, captured from the official API-advertised raw_text_url; base64 preserves source NUL bytes.",
+  "expected_outcome": {
+    "annual_spend_exposed": 6000000,
+    "spend_requiring_validation": 3000000,
+    "affected_product_lines": 2,
+    "outlook_status": "Action recommended"
+  },
+  "note": "Pinned Featured Demonstration Notice input. content_sha256/source_content_sha256 fingerprints the original official response bytes. The seed adapter deterministically escapes U+0000 as literal \\0 for PostgreSQL TEXT and records the resulting persisted-content hash in raw_payload. Normal live ingestion still fetches the source through FederalRegisterClient; this artifact is reproducibility evidence, not a live-run claim."
+}

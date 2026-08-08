@@ -1,0 +1,343 @@
+{
+  "repository": "cookx775/tariff-copilot",
+  "spec": {
+    "number": 7,
+    "title": "Build the Tariff & Trade-Policy Exposure Copilot",
+    "url": "https://github.com/cookx775/tariff-copilot/issues/7"
+  },
+  "generated_at": "2026-08-07T17:11:50.700113+00:00",
+  "timezone": "America/Chicago",
+  "lanes": [
+    "Platform/deployment",
+    "Spark/data",
+    "Retrieval/agent",
+    "Domain/repository/tests",
+    "Frontend",
+    "Documentation/demo readiness"
+  ],
+  "gates": [
+    {
+      "label": "Friday platform verification",
+      "at": "2026-08-07T18:30:00-05:00",
+      "kind": "gate"
+    },
+    {
+      "label": "Saturday integrated slice",
+      "at": "2026-08-08T23:00:00-05:00",
+      "kind": "gate"
+    },
+    {
+      "label": "Sunday complete frontend",
+      "at": "2026-08-09T12:00:00-05:00",
+      "kind": "gate"
+    },
+    {
+      "label": "Feature freeze",
+      "at": "2026-08-09T13:00:00-05:00",
+      "kind": "freeze"
+    },
+    {
+      "label": "Internal submission target",
+      "at": "2026-08-09T20:00:00-05:00",
+      "kind": "target"
+    },
+    {
+      "label": "Official deadline · 10 PM PT",
+      "at": "2026-08-10T00:00:00-05:00",
+      "kind": "deadline"
+    }
+  ],
+  "contingency_cuts": [
+    "Remove the negative notice from the live demo; retain its automated test.",
+    "Remove simulated-failure UI controls; retain real failure handling and tests.",
+    "Collapse expanded Analysis & Action History; retain persisted audit events.",
+    "Remove the read-only Sourcing Reviews index; retain direct Review detail.",
+    "Use generated confirmation defaults instead of editable objective and owner.",
+    "Remove live USITC ingestion and broad notice coverage; retain pinned classifications and one live Federal Register path.",
+    "Remove successor-analysis UI; retain immutable snapshot records."
+  ],
+  "tickets": [
+    {
+      "number": 8,
+      "sequence": 1,
+      "title": "Prove the deployed Lakebase application foundation",
+      "url": "https://github.com/cookx775/tariff-copilot/issues/8",
+      "state": "open",
+      "assignees": [],
+      "labels": [
+        "ready-for-agent"
+      ],
+      "lane": "Platform/deployment",
+      "target_start": "2026-08-07T12:00:00-05:00",
+      "target_end": "2026-08-07T18:30:00-05:00",
+      "gate": "Friday platform verification",
+      "contingency": "Never cut",
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "xhigh",
+      "prior_art": "Homework 1 Lakebase OAuth pool, repository initialization, forwarded identity, Streamlit startup test",
+      "parallel_safe_with": "None; this establishes the shared contracts for the first parallel frontier",
+      "summary": "Deliver the smallest deployed Tariff Copilot path that proves the public repository, Streamlit application, Databricks App resource, dedicated Lakebase schema, rotating OAuth credentials, authenticated actor, workflow facade, and durable database access work together. The Strategic Sourcing Manager sees the persistent illustrative-scenario disclosure and an empty or seeded Policy Inbox shell; a diagnostic record written through the application remains readable after reload.",
+      "blockers": [],
+      "dependents": [
+        9,
+        10,
+        14
+      ]
+    },
+    {
+      "number": 9,
+      "sequence": 2,
+      "title": "Make policy evidence searchable from the Policy Inbox",
+      "url": "https://github.com/cookx775/tariff-copilot/issues/9",
+      "state": "open",
+      "assignees": [],
+      "labels": [
+        "ready-for-agent"
+      ],
+      "lane": "Spark/data",
+      "target_start": "2026-08-07T21:00:00-05:00",
+      "target_end": "2026-08-08T17:30:00-05:00",
+      "gate": "Saturday-evening integrated slice",
+      "contingency": "Never cut",
+      "model": "gpt-5.6-terra",
+      "reasoning_effort": "xhigh",
+      "prior_art": "Homework 2 injectable jobs, direct PostgreSQL vector upserts, content hashes, lazy embeddings, HNSW cosine retrieval, schema verifier",
+      "parallel_safe_with": "Load and disclose the Demonstration Scenario; Build the scoring-evidence harness",
+      "summary": "Deliver one complete policy-evidence path: a Git-sourced Spark task fetches at least one live Federal Register API response, persists an immutable Policy Notice Snapshot, normalizes hard-wrapped body text, extracts HTS references, creates policy-aware chunks, produces 1024-dimensional embeddings, and makes the evidence semantically searchable through pgvector. The resulting notice appears in the Current Policy Inbox and remains after reload.",
+      "blockers": [
+        8
+      ],
+      "dependents": [
+        11,
+        15
+      ]
+    },
+    {
+      "number": 10,
+      "sequence": 3,
+      "title": "Load and disclose the Demonstration Scenario",
+      "url": "https://github.com/cookx775/tariff-copilot/issues/10",
+      "state": "open",
+      "assignees": [],
+      "labels": [
+        "ready-for-agent"
+      ],
+      "lane": "Domain/repository/tests",
+      "target_start": "2026-08-07T21:00:00-05:00",
+      "target_end": "2026-08-08T15:00:00-05:00",
+      "gate": "Saturday-evening integrated slice",
+      "contingency": "Never cut",
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "xhigh",
+      "prior_art": "Homework 1 repository boundaries and idempotent seed locking, adapted to immutable versioned capstone records",
+      "parallel_safe_with": "Make policy evidence searchable from the Policy Inbox; Build the scoring-evidence harness",
+      "summary": "Deliver the versioned enterprise context that makes exposure analysis possible without misrepresenting modeled data. Load the agreed Public Enterprise Backbone, five Components, six BOM Relationships, six Supply Relationships, fictional Suppliers, countries of origin, Annual Spend, and Classification Assertions. Make this context available through the bounded Retrieve Exposure Context operation and render the persistent disclosure that separates public Mueller Water Products facts, public policy/HTS evidence, synthetic procurement data, and model-generated analysis.",
+      "blockers": [
+        8
+      ],
+      "dependents": [
+        11
+      ]
+    },
+    {
+      "number": 11,
+      "sequence": 4,
+      "title": "Generate the featured evidence-backed Impact Outlook",
+      "url": "https://github.com/cookx775/tariff-copilot/issues/11",
+      "state": "open",
+      "assignees": [],
+      "labels": [
+        "ready-for-agent"
+      ],
+      "lane": "Retrieval/agent",
+      "target_start": "2026-08-08T17:30:00-05:00",
+      "target_end": "2026-08-08T20:30:00-05:00",
+      "gate": "Saturday-evening integrated slice",
+      "contingency": "Never cut",
+      "model": "gpt-5.6-terra",
+      "reasoning_effort": "xhigh",
+      "prior_art": "Homework 2 semantic retrieval seam plus the frozen A+C Impact Outlook prototype",
+      "parallel_safe_with": "None; this integrates the first parallel frontier",
+      "summary": "Deliver the primary decision path from the Featured Demonstration Notice to one immutable, persisted Impact Outlook Snapshot. The workflow facade invokes only the three bounded read tools, retrieves the exact Section 301 evidence and Demonstration Scenario context, deterministically calculates exposure, validates constrained model output, and renders the executive brief, decision metrics, product-line Impact Findings, Evidence Bundles, uncertainty, and full-width Recommended Actions.",
+      "blockers": [
+        9,
+        10
+      ],
+      "dependents": [
+        12,
+        13
+      ]
+    },
+    {
+      "number": 12,
+      "sequence": 5,
+      "title": "Open a confirmed Sourcing Review",
+      "url": "https://github.com/cookx775/tariff-copilot/issues/12",
+      "state": "open",
+      "assignees": [],
+      "labels": [
+        "ready-for-agent"
+      ],
+      "lane": "Retrieval/agent",
+      "target_start": "2026-08-08T20:30:00-05:00",
+      "target_end": "2026-08-08T23:00:00-05:00",
+      "gate": "Saturday-evening integrated slice",
+      "contingency": "Never cut",
+      "model": "gpt-5.6-terra",
+      "reasoning_effort": "xhigh",
+      "prior_art": "Homework 1 durable write and actor identity patterns, strengthened by the Wayfinder confirmation and audit contract",
+      "parallel_safe_with": "Prove negative, validation, and failure-safe analysis",
+      "summary": "Deliver the agent's one real operational write. From one stored Recommended Action on a Complete Impact Outlook Snapshot, present the exact review payload, require an explicit server-valid confirmation, create one durable idempotent Sourcing Review with its fixed evidence scope, append the Agent Run outcome, and navigate directly to Review detail.",
+      "blockers": [
+        11
+      ],
+      "dependents": [
+        15,
+        16
+      ]
+    },
+    {
+      "number": 13,
+      "sequence": 6,
+      "title": "Prove negative, validation, and failure-safe analysis",
+      "url": "https://github.com/cookx775/tariff-copilot/issues/13",
+      "state": "open",
+      "assignees": [],
+      "labels": [
+        "ready-for-agent"
+      ],
+      "lane": "Domain/repository/tests",
+      "target_start": "2026-08-08T20:30:00-05:00",
+      "target_end": "2026-08-08T23:00:00-05:00",
+      "gate": "Saturday-evening integrated slice",
+      "contingency": "Core behavior and tests never cut; negative live-demo coda is cut 1 and simulated failure controls are cut 2",
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "xhigh",
+      "prior_art": "Homework 2 empty-result, partial-upstream-failure, stale-content, and deterministic job tests",
+      "parallel_safe_with": "Open a confirmed Sourcing Review",
+      "summary": "Deliver the non-happy paths that make the Impact Outlook trustworthy. Analyze the pinned L-Lysine notice through the same workflow and produce No Actionable Exposure Identified. Preserve useful conditional recommendations for validation cases, exclude unsupported findings, and ensure required retrieval, fingerprint, generated-output, or persistence failures create Failed processing without a partial Outlook. Reanalysis creates a linked successor.",
+      "blockers": [
+        11
+      ],
+      "dependents": [
+        15,
+        16
+      ]
+    },
+    {
+      "number": 14,
+      "sequence": 7,
+      "title": "Build the scoring-evidence harness",
+      "url": "https://github.com/cookx775/tariff-copilot/issues/14",
+      "state": "open",
+      "assignees": [],
+      "labels": [
+        "ready-for-agent"
+      ],
+      "lane": "Documentation/demo readiness",
+      "target_start": "2026-08-07T21:00:00-05:00",
+      "target_end": "2026-08-08T14:00:00-05:00",
+      "gate": "Saturday-evening integrated slice",
+      "contingency": "Never cut",
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "xhigh",
+      "prior_art": "Homework 1 configuration/repository/AppTest suite and Homework 2 job/retrieval/schema/grading evidence",
+      "parallel_safe_with": "Make policy evidence searchable from the Policy Inbox; Load and disclose the Demonstration Scenario",
+      "summary": "Deliver an executable evidence and packaging harness that makes every mandatory course requirement easy to verify while feature work proceeds. Establish focused test fixtures and adapters, schema/run verification, the five-requirement evidence manifest, deployment smoke checklist, README structure, deterministic ZIP assembly checks, and secret scanning. The harness may begin with expected placeholders but must fail visibly rather than claim evidence that does not exist.",
+      "blockers": [
+        8
+      ],
+      "dependents": [
+        16
+      ]
+    },
+    {
+      "number": 15,
+      "sequence": 8,
+      "title": "Complete the five-minute sourcing-manager journey",
+      "url": "https://github.com/cookx775/tariff-copilot/issues/15",
+      "state": "open",
+      "assignees": [],
+      "labels": [
+        "ready-for-agent"
+      ],
+      "lane": "Frontend",
+      "target_start": "2026-08-09T08:00:00-05:00",
+      "target_end": "2026-08-09T12:00:00-05:00",
+      "gate": "Sunday-midday complete frontend",
+      "contingency": "Baseline required; optional subfeatures follow cuts 1 through 5",
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "xhigh",
+      "prior_art": "Frozen prototype Variant A structure with Variant C executive-impact treatment",
+      "parallel_safe_with": "None; integrates the complete user journey",
+      "summary": "Deliver the complete polished Strategic Sourcing Manager journey in Streamlit using the frozen guided-workflow prototype as the interaction source and its executive-narrative treatment as the Outlook hierarchy. The user can move from the disclosed featured-versus-live Policy Inbox through evidence and full-width Recommended Actions, explicitly confirm a Sourcing Review, land on durable Review detail, and reopen it from the lightweight index.",
+      "blockers": [
+        9,
+        12,
+        13
+      ],
+      "dependents": [
+        16
+      ]
+    },
+    {
+      "number": 16,
+      "sequence": 9,
+      "title": "Release the deployed submission package",
+      "url": "https://github.com/cookx775/tariff-copilot/issues/16",
+      "state": "open",
+      "assignees": [],
+      "labels": [
+        "ready-for-agent"
+      ],
+      "lane": "Documentation/demo readiness",
+      "target_start": "2026-08-09T12:00:00-05:00",
+      "target_end": "2026-08-09T20:00:00-05:00",
+      "gate": "Sunday-afternoon feature freeze and release",
+      "contingency": "Never cut",
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "xhigh",
+      "prior_art": "Homework 2's successful grading evidence and deterministic submission ZIP discipline",
+      "parallel_safe_with": "None; final integration and release",
+      "summary": "Deliver the upload-ready capstone release after feature freeze. Integrate the completed workflow, run the focused test and evidence harness, deploy from the default branch, verify the five-minute path and persistence, capture required evidence, finalize the README, and build the mandatory secret-free submission ZIP. Stop adding features after the Sunday-afternoon gate; only test, evidence, deployment, packaging, and rehearsal fixes remain.",
+      "blockers": [
+        12,
+        13,
+        14,
+        15
+      ],
+      "dependents": []
+    }
+  ],
+  "frontier": [
+    8
+  ],
+  "critical_path": [
+    8,
+    9,
+    11,
+    12,
+    15,
+    16
+  ],
+  "parallel_fronts": [
+    [
+      9,
+      10,
+      14
+    ],
+    [
+      12,
+      13
+    ]
+  ],
+  "timeline": {
+    "start": "2026-08-07T12:00:00-05:00",
+    "end": "2026-08-10T00:00:00-05:00"
+  },
+  "model_policy": {
+    "default": "Use the ticket's recommended model and reasoning effort.",
+    "luna_to_terra": "Escalate only for unresolved cross-system behavior, architectural misunderstanding, or repeated contract violations.",
+    "terra_to_sol": "Escalate only when evidence-driven debugging cannot isolate a platform or integration failure."
+  }
+}

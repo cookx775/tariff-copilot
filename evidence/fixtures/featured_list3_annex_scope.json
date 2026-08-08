@@ -1,0 +1,23 @@
+{
+  "fixture_status": "pinned-official-final-annex-extract",
+  "source_name": "Office of the United States Trade Representative",
+  "source_document": "Notice of Modification of Section 301 Action: China's Acts, Policies, and Practices Related to Technology Transfer, Intellectual Property, and Innovation",
+  "source_url": "https://ustr.gov/sites/default/files/enforcement/301Investigations/83%20FR%2047974.pdf",
+  "source_sha256": "1673a0954c3d0f50db8f275c9aafe4a6c576b487897d0821d7af128b25b19cdc",
+  "source_format": "official USTR-hosted final Federal Register PDF",
+  "annex": "Annex A",
+  "final_exclusion_review_pdf_page_number": 2,
+  "final_exclusion_review_printed_federal_register_page": "47975",
+  "scope_note_pdf_page_number": 4,
+  "scope_note_printed_federal_register_page": "47977",
+  "heading_pdf_page_number": 25,
+  "heading_printed_federal_register_page": "47998",
+  "extraction_method": "pypdf 6.10.0 extraction, with visual review of final Annex A PDF page 25; only the final-action exclusion review, Annex A scope text, and selected final heading are retained.",
+  "scope_text_sha256": "3c35d6dab59a4b98bb531f5aff1ecdf555ee0564100aa98099a4225dd508fadd",
+  "scope_text": "The Trade Representative has determined not to include certain tariff subheadings listed in the Annex to the July 17 notice, resulting in 5,745 full and partial tariff subheadings with an approximate annual trade value of $200 billion. Pursuant to Section 307(a)(1) of the Trade Act, the Trade Representative, in accordance with the direction of the President, has determined to modify the prior action in this investigation by imposing additional duties on products of China classified in the full and partial subheadings of the HTSUS set out in Annex A to this notice, while maintaining the prior action.\n\nAnnex A\n\n(f) Heading 9903.88.03 applies to all products of China that are classified in the following 8-digit subheadings:\n\n8308.20.60 8413.11.00 8425.31.01 8467.99.01 8481.30.10",
+  "htsus_subheadings": [
+    "8481.30.10"
+  ],
+  "selected_heading_final_status": "listed in final Annex A",
+  "note": "This is final-action evidence from 2018-20610 / 83 FR 47974, not the July proposed list. The final exclusion review states that some July headings were removed, while the final Annex A enumeration still lists 8481.30.10."
+}
