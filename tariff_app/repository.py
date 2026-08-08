@@ -55,7 +55,7 @@ OUTLOOK_COLUMNS = (
     "processing_state, outlook_status, impact_window_start, impact_window_label, "
     "impact_window_policy_chunk_id, impact_window_policy_citation, impact_window_policy_chunk_text, "
     "annual_spend_exposed, spend_requiring_validation, affected_product_line_count, "
-    "executive_brief, successor_of_outlook_id, created_at"
+    "executive_brief, successor_of_outlook_id, reanalysis_sequence, created_at"
 )
 INDEX_NAME_PATTERN = re.compile(r"^CREATE INDEX IF NOT EXISTS ([A-Za-z0-9_]+)", re.IGNORECASE)
 MAX_CONTEXT_COMPONENTS = 20
@@ -257,11 +257,16 @@ class TariffRepository:
               AND LOWER(BTRIM(COALESCE(analysis_version, ''))) <> 'unavailable'
               AND NULLIF(BTRIM(COALESCE(impact_window_label, '')), '') IS NOT NULL
               AND LOWER(BTRIM(COALESCE(impact_window_label, ''))) <> 'unavailable'
-              AND impact_window_policy_chunk_id IS NOT NULL
-              AND NULLIF(BTRIM(COALESCE(impact_window_policy_citation, '')), '') IS NOT NULL
-              AND LOWER(BTRIM(COALESCE(impact_window_policy_citation, ''))) <> 'unavailable'
-              AND NULLIF(BTRIM(COALESCE(impact_window_policy_chunk_text, '')), '') IS NOT NULL
-              AND LOWER(BTRIM(COALESCE(impact_window_policy_chunk_text, ''))) <> 'unavailable'
+              AND (
+                  impact_window_start IS NULL
+                  OR (
+                      impact_window_policy_chunk_id IS NOT NULL
+                      AND NULLIF(BTRIM(COALESCE(impact_window_policy_citation, '')), '') IS NOT NULL
+                      AND LOWER(BTRIM(COALESCE(impact_window_policy_citation, ''))) <> 'unavailable'
+                      AND NULLIF(BTRIM(COALESCE(impact_window_policy_chunk_text, '')), '') IS NOT NULL
+                      AND LOWER(BTRIM(COALESCE(impact_window_policy_chunk_text, ''))) <> 'unavailable'
+                  )
+              )
               AND NOT EXISTS (
                   SELECT 1
                   FROM tariff.impact_findings legacy_finding
@@ -313,14 +318,15 @@ class TariffRepository:
                     impact_window_policy_chunk_id, impact_window_policy_citation,
                     impact_window_policy_chunk_text,
                     annual_spend_exposed, spend_requiring_validation, affected_product_line_count,
-                    executive_brief, successor_of_outlook_id, created_at
+                    executive_brief, successor_of_outlook_id, reanalysis_sequence, created_at
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                    %s, %s, %s
+                    %s, %s, %s, %s
                 )
                 ON CONFLICT (
                     notice_id, policy_snapshot_version, scenario_version,
-                    enterprise_data_version, classification_schedule_version, analysis_version
+                    enterprise_data_version, classification_schedule_version, analysis_version,
+                    reanalysis_sequence
                 )
                 DO NOTHING
                 RETURNING {OUTLOOK_COLUMNS}
@@ -389,7 +395,14 @@ class TariffRepository:
                     )
                 _append_agent_run(cursor, agent_run, outlook_id=persisted.outlook_id)
         if should_load_existing:
-            existing = self.get_complete_impact_outlook_for_notice(outlook.notice_id)
+            existing = self.get_complete_impact_outlook_for_notice(
+                outlook.notice_id,
+                policy_snapshot_version=outlook.policy_snapshot_version,
+                scenario_version=outlook.scenario_version,
+                enterprise_data_version=outlook.enterprise_data_version,
+                classification_schedule_version=outlook.classification_schedule_version,
+                analysis_version=outlook.analysis_version,
+            )
             if existing is None:
                 raise RuntimeError("Immutable Impact Outlook conflict did not return a snapshot.")
             self.append_agent_run(
@@ -1051,14 +1064,27 @@ def _outlook_insert_params(outlook: ImpactOutlookSnapshot) -> tuple[Any, ...]:
         outlook.outlook_status,
         outlook.impact_window_start,
         outlook.impact_window_label,
-        outlook.impact_window_policy_evidence.chunk_id,
-        outlook.impact_window_policy_evidence.citation,
-        outlook.impact_window_policy_evidence.chunk_text,
+        (
+            outlook.impact_window_policy_evidence.chunk_id
+            if outlook.impact_window_policy_evidence
+            else None
+        ),
+        (
+            outlook.impact_window_policy_evidence.citation
+            if outlook.impact_window_policy_evidence
+            else None
+        ),
+        (
+            outlook.impact_window_policy_evidence.chunk_text
+            if outlook.impact_window_policy_evidence
+            else None
+        ),
         outlook.annual_spend_exposed,
         outlook.spend_requiring_validation,
         outlook.affected_product_line_count,
         outlook.executive_brief,
         outlook.successor_of_outlook_id,
+        outlook.reanalysis_sequence,
         outlook.created_at,
     )
 
@@ -1109,6 +1135,16 @@ def _evidence_bundle_insert_params(finding_id: int, bundle: EvidenceBundle) -> t
 
 
 def _outlook_from_row(row: Any) -> ImpactOutlookSnapshot:
+    impact_window_evidence = (
+        PolicyEvidence(
+            chunk_id=row["impact_window_policy_chunk_id"],
+            citation=row["impact_window_policy_citation"],
+            canonical_url="",
+            chunk_text=row["impact_window_policy_chunk_text"],
+        )
+        if row["impact_window_policy_chunk_id"] is not None
+        else None
+    )
     return ImpactOutlookSnapshot(
         outlook_id=row["outlook_id"],
         notice_id=row["notice_id"],
@@ -1121,12 +1157,7 @@ def _outlook_from_row(row: Any) -> ImpactOutlookSnapshot:
         outlook_status=row["outlook_status"],
         impact_window_start=row["impact_window_start"],
         impact_window_label=row["impact_window_label"],
-        impact_window_policy_evidence=PolicyEvidence(
-            chunk_id=row["impact_window_policy_chunk_id"],
-            citation=row["impact_window_policy_citation"],
-            canonical_url="",
-            chunk_text=row["impact_window_policy_chunk_text"],
-        ),
+        impact_window_policy_evidence=impact_window_evidence,
         annual_spend_exposed=row["annual_spend_exposed"],
         spend_requiring_validation=row["spend_requiring_validation"],
         affected_product_line_count=row["affected_product_line_count"],
@@ -1135,6 +1166,7 @@ def _outlook_from_row(row: Any) -> ImpactOutlookSnapshot:
         recommended_actions=(),
         created_at=row["created_at"],
         successor_of_outlook_id=row["successor_of_outlook_id"],
+        reanalysis_sequence=row.get("reanalysis_sequence", 0),
     )
 
 
