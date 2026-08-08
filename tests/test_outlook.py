@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import replace
+import hashlib
+from dataclasses import asdict, replace
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
@@ -38,6 +39,10 @@ PUBLIC = ProvenanceRecord(
     source_url="https://www.sec.gov/example",
     source_citation="FY2025 Form 10-K, Item 1.",
 )
+FEATURED_RAW_CONTENT = "Featured Section 301 policy source content."
+FEATURED_CONTENT_SHA256 = hashlib.sha256(FEATURED_RAW_CONTENT.encode("utf-8")).hexdigest()
+GENERIC_RAW_CONTENT = "Generic policy notice source content."
+GENERIC_CONTENT_SHA256 = hashlib.sha256(GENERIC_RAW_CONTENT.encode("utf-8")).hexdigest()
 
 
 def featured_notice():
@@ -50,8 +55,9 @@ def featured_notice():
         publication_date=date(2018, 9, 21),
         effective_date=date(2018, 9, 24),
         retrieved_at=NOW,
-        content_sha256="f" * 64,
+        content_sha256=FEATURED_CONTENT_SHA256,
         is_featured=True,
+        raw_content=FEATURED_RAW_CONTENT,
     )
 
 
@@ -88,12 +94,65 @@ def effective_date_evidence():
     )
 
 
-def negative_notice():
-    source = next(
+def generic_notice(*, effective_date=date(2026, 1, 2)):
+    return PolicyNoticeSnapshot(
+        notice_id=19,
+        source_identifier="2026-00019",
+        title="Generic tariff policy notice",
+        agency="Office of the United States Trade Representative",
+        canonical_url="https://www.federalregister.gov/d/2026-00019",
+        publication_date=date(2026, 1, 1),
+        effective_date=effective_date,
+        retrieved_at=NOW,
+        content_sha256=GENERIC_CONTENT_SHA256,
+        is_featured=False,
+        raw_content=GENERIC_RAW_CONTENT,
+    )
+
+
+def generic_evidence(*, includes_origin=True, includes_effective_date=True):
+    scope = PolicySearchResult(
+        notice_id=19,
+        source_identifier="2026-00019",
+        canonical_url="https://www.federalregister.gov/d/2026-00019",
+        publication_date=date(2026, 1, 1),
+        chunk_id=201,
+        chunk_index=0,
+        section_title="Tariff scope",
+        chunk_text=(
+            "Products of China classified under HTSUS 8481.30.10 are covered."
+            if includes_origin
+            else "Products classified under HTSUS 8481.30.10 are covered."
+        ),
+        start_offset=0,
+        end_offset=65,
+        similarity=0.98,
+    )
+    if not includes_effective_date:
+        return [scope]
+    return [
+        scope,
+        replace(
+            scope,
+            chunk_id=202,
+            chunk_index=1,
+            chunk_text="The duties apply on or after January 2, 2026.",
+            start_offset=66,
+            end_offset=111,
+        ),
+    ]
+
+
+def negative_source():
+    return next(
         notice
         for notice in load_pinned_demonstration_notice_set()
         if notice.source_identifier == "2026-01193"
     )
+
+
+def negative_notice():
+    source = negative_source()
     return PolicyNoticeSnapshot(
         notice_id=18,
         source_identifier=source.source_identifier,
@@ -113,11 +172,7 @@ def negative_notice():
 
 
 def negative_evidence():
-    source = next(
-        notice
-        for notice in load_pinned_demonstration_notice_set()
-        if notice.source_identifier == "2026-01193"
-    )
+    source = negative_source()
     chunks = chunk_policy_notice(source)
     selected = [
         chunk
@@ -395,7 +450,7 @@ def test_featured_workflow_publishes_complete_deduplicated_evidence_backed_snaps
         "evaluate_alternate_sourcing",
     }
     _, run = repository.persisted
-    assert run.policy_snapshot_version == "f" * 64
+    assert run.policy_snapshot_version == FEATURED_CONTENT_SHA256
     assert run.model_version == "bounded-template.v2"
     assert run.prompt_version == "impact-outlook-narrative.v2"
     assert [event.tool_name for event in run.tool_events] == [
@@ -410,7 +465,7 @@ def test_featured_workflow_publishes_complete_deduplicated_evidence_backed_snaps
             "existing",
             17,
             {
-                "policy_snapshot_version": "f" * 64,
+                "policy_snapshot_version": FEATURED_CONTENT_SHA256,
                 "scenario_version": "demonstration-2025-fy.v1",
                 "enterprise_data_version": "demonstration-enterprise.v1",
                 "classification_schedule_version": "htsus-2025-09-30.v1",
@@ -440,7 +495,7 @@ def test_reopening_existing_outlook_returns_persisted_snapshot_without_recalcula
             "existing",
             17,
             {
-                "policy_snapshot_version": "f" * 64,
+                "policy_snapshot_version": FEATURED_CONTENT_SHA256,
                 "scenario_version": "demonstration-2025-fy.v1",
                 "enterprise_data_version": "demonstration-enterprise.v1",
                 "classification_schedule_version": "htsus-2025-09-30.v1",
@@ -471,6 +526,80 @@ def test_complete_snapshot_can_omit_the_optional_impact_window_date_when_policy_
     assert outlook.impact_window_start is None
     assert outlook.impact_window_label.startswith("Requires validation:")
     assert outlook.impact_window_policy_evidence.chunk_id == 92
+
+
+def test_missing_effective_date_evidence_requires_validation_even_with_direct_exposure():
+    outlook = build_impact_outlook(
+        notice=generic_notice(),
+        policy_evidence=generic_evidence(includes_effective_date=False),
+        exposure_context=exposure_context(),
+        generated_output=BoundedNarrativeModel().generate(
+            finding_keys=("fire_hydrants", "specialty_valves")
+        ),
+        now=NOW,
+    )
+
+    assert outlook.outlook_status == "Validation required"
+    assert outlook.annual_spend_exposed == Decimal("6000000.00")
+    assert outlook.impact_window_start is None
+    assert outlook.impact_window_policy_evidence is None
+    assert outlook.impact_window_label.startswith("Requires validation:")
+    assert outlook.recommended_actions[0].action_key == "validate_classification_or_origin"
+    assert all(action.is_conditional for action in outlook.recommended_actions[1:])
+
+
+def test_missing_origin_evidence_is_validation_spend_not_an_assessed_negative():
+    outlook = build_impact_outlook(
+        notice=generic_notice(),
+        policy_evidence=generic_evidence(includes_origin=False),
+        exposure_context=exposure_context(),
+        generated_output=BoundedNarrativeModel().generate(
+            finding_keys=("fire_hydrants", "specialty_valves")
+        ),
+        now=NOW,
+    )
+
+    assert outlook.outlook_status == "Validation required"
+    assert outlook.annual_spend_exposed == Decimal("0.00")
+    assert outlook.spend_requiring_validation == Decimal("11000000.00")
+    assert all(
+        bundle.match_confidence == "Needs validation"
+        for finding in outlook.findings
+        for bundle in finding.evidence_bundles
+    )
+
+
+def test_empty_snapshot_content_cannot_bypass_fingerprint_validation():
+    class EmptyContentRepository(FeaturedRepository):
+        def __init__(self):
+            super().__init__()
+            self.notice = replace(self.notice, raw_content="")
+
+    repository = EmptyContentRepository()
+    workflow = TariffWorkflow(repository, actor_email="manager@example.com", clock=lambda: NOW)
+
+    with pytest.raises(ValueError, match="content is required"):
+        workflow.analyze_policy_notice(17, embedding_service=Embeddings())
+
+    assert repository.persisted is None
+    assert len(repository.failed_runs) == 1
+    assert repository.failed_runs[0].snapshot_obtained is True
+
+
+def test_mismatched_snapshot_identifier_cannot_publish_an_outlook():
+    class MismatchedSnapshotRepository(FeaturedRepository):
+        def get_policy_notice_snapshot(self, notice_id):
+            self.calls.append(("snapshot", notice_id))
+            return replace(self.notice, notice_id=notice_id + 1)
+
+    repository = MismatchedSnapshotRepository()
+    workflow = TariffWorkflow(repository, actor_email="manager@example.com", clock=lambda: NOW)
+
+    with pytest.raises(ValueError, match="does not match"):
+        workflow.analyze_policy_notice(17, embedding_service=Embeddings())
+
+    assert repository.persisted is None
+    assert len(repository.failed_runs) == 1
 
 
 def test_pre_snapshot_failure_records_an_explicit_unobtained_snapshot_attempt():
@@ -531,28 +660,59 @@ def test_post_snapshot_lookup_failure_retains_the_obtained_snapshot_and_event():
     failed_run = repository.failed_runs[0]
     assert failed_run.snapshot_obtained is True
     assert failed_run.notice_id == 17
-    assert failed_run.policy_snapshot_version == "f" * 64
+    assert failed_run.policy_snapshot_version == FEATURED_CONTENT_SHA256
     assert failed_run.error_boundary == "retrieval_or_validation"
     assert [event.tool_name for event in failed_run.tool_events] == [
         "retrieve_policy_notice_snapshot"
     ]
 
 
-def test_changed_input_version_creates_a_successor_instead_of_reopening_a_stale_outlook():
-    repository = FeaturedRepository()
+def test_explicit_same_version_reanalysis_creates_an_immutable_linked_successor():
+    class SuccessorRepository(FeaturedRepository):
+        def __init__(self):
+            super().__init__()
+            self.snapshots = []
+            self.runs = []
+
+        def get_complete_impact_outlook_for_notice(self, notice_id, **versions):
+            self.calls.append(("existing", notice_id, versions))
+            candidates = [snapshot for snapshot in self.snapshots if snapshot.notice_id == notice_id]
+            if versions:
+                candidates = [
+                    snapshot
+                    for snapshot in candidates
+                    if all(getattr(snapshot, key) == value for key, value in versions.items())
+                ]
+            return candidates[-1] if candidates else None
+
+        def persist_impact_outlook(self, *, outlook, agent_run):
+            self.calls.append(("persist", outlook.notice_id))
+            persisted = outlook.with_persistence(
+                outlook_id=44 + len(self.snapshots), created_at=NOW
+            )
+            self.snapshots.append(persisted)
+            self.runs.append(agent_run)
+            self.persisted = (outlook, agent_run)
+            return persisted
+
+    repository = SuccessorRepository()
     workflow = TariffWorkflow(repository, actor_email="manager@example.com", clock=lambda: NOW)
     predecessor = workflow.analyze_policy_notice(17, embedding_service=Embeddings())
-    repository.existing = replace(
-        predecessor,
-        enterprise_data_version="demonstration-enterprise.v0",
-    )
+    predecessor_bytes = asdict(predecessor)
     repository.calls.clear()
 
-    successor = workflow.analyze_policy_notice(17, embedding_service=Embeddings())
+    successor = workflow.analyze_policy_notice(
+        17, embedding_service=Embeddings(), reanalysis=True
+    )
 
-    assert successor.outlook_id == 44
-    persisted, _run = repository.persisted
-    assert persisted.successor_of_outlook_id == predecessor.outlook_id
+    assert successor.outlook_id != predecessor.outlook_id
+    assert successor.successor_of_outlook_id == predecessor.outlook_id
+    assert successor.reanalysis_sequence == predecessor.reanalysis_sequence + 1
+    assert successor.policy_snapshot_version == predecessor.policy_snapshot_version
+    assert successor.enterprise_data_version == predecessor.enterprise_data_version
+    assert asdict(predecessor) == predecessor_bytes
+    assert len(repository.snapshots) == 2
+    assert len(repository.runs) == 2
     assert ("context", ("check_valve_cartridge", "valve_body_trim")) in repository.calls
 
 
@@ -813,7 +973,7 @@ def test_persistence_failure_records_a_failed_run_without_a_partial_outlook():
     assert failed_run.error_boundary == "persistence"
     assert failed_run.snapshot_obtained is True
     assert failed_run.notice_id == 17
-    assert failed_run.policy_snapshot_version == "f" * 64
+    assert failed_run.policy_snapshot_version == FEATURED_CONTENT_SHA256
     assert [event.event_index for event in failed_run.tool_events] == [1, 2, 3]
 
 
@@ -880,7 +1040,9 @@ def test_explicit_retry_creates_a_new_run_after_a_failed_persistence_attempt():
             if self.fail_persist:
                 self.fail_persist = False
                 raise RuntimeError("database write interrupted")
-            self.persisted = (outlook, agent_run)
+            persisted_run = replace(agent_run, agent_run_id=70 + len(self.runs))
+            self.runs.append(persisted_run)
+            self.persisted = (outlook, persisted_run)
             self.existing = outlook.with_persistence(outlook_id=44, created_at=NOW)
             return self.existing
 
@@ -898,5 +1060,7 @@ def test_explicit_retry_creates_a_new_run_after_a_failed_persistence_attempt():
     )
 
     assert retried.processing_state == "Complete"
-    assert len(repository.runs) == 1
+    assert len(repository.runs) == 2
+    assert [run.processing_state for run in repository.runs] == ["Failed", "Complete"]
+    assert repository.runs[1].retry_predecessor_run_id == failed_run_id
     assert repository.persisted[1].retry_predecessor_run_id == failed_run_id

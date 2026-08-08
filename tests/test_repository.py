@@ -109,7 +109,7 @@ def test_schema_loader_keeps_actionable_postgresql_migration_guards_as_single_st
     assert all("RAISE EXCEPTION USING" in guard for guard in guards)
     assert all("HINT =" in guard and guard.endswith("$$") for guard in guards)
     assert any(
-        "ALTER COLUMN impact_window_policy_citation SET NOT NULL" in statement
+        "ALTER COLUMN impact_window_policy_citation DROP NOT NULL" in statement
         for statement in statements
     )
     assert any("ALTER COLUMN hts_scope_codes SET NOT NULL" in statement for statement in statements)
@@ -312,6 +312,8 @@ def test_completed_outlook_lookup_requires_the_full_current_input_version_tuple(
     assert "NULLIF(BTRIM(COALESCE(impact_window_policy_citation, '')), '') IS NOT NULL" in query
     assert "legacy_evidence.hts_scope_codes = '[]'::jsonb" in query
     assert "legacy_evidence.classification_evidence = '[]'::jsonb" in query
+    assert "ORDER BY created_at DESC, outlook_id DESC" in query
+    assert "ORDER BY created_at DESC, reanalysis_sequence DESC" not in query
     assert params == (
         7,
         "a" * 64,

@@ -231,6 +231,7 @@ CREATE TABLE IF NOT EXISTS tariff.impact_outlook_snapshots (
     affected_product_line_count INTEGER NOT NULL CHECK (affected_product_line_count >= 0),
     executive_brief TEXT NOT NULL,
     successor_of_outlook_id BIGINT REFERENCES tariff.impact_outlook_snapshots(outlook_id),
+    reanalysis_sequence INTEGER NOT NULL DEFAULT 0 CHECK (reanalysis_sequence >= 0),
     created_at TIMESTAMPTZ NOT NULL,
     CONSTRAINT impact_outlook_snapshot_status_check CHECK (
         (processing_state = 'Complete' AND outlook_status IS NOT NULL)
@@ -242,7 +243,8 @@ CREATE TABLE IF NOT EXISTS tariff.impact_outlook_snapshots (
         scenario_version,
         enterprise_data_version,
         classification_schedule_version,
-        analysis_version
+        analysis_version,
+        reanalysis_sequence
     )
 );
 
@@ -253,7 +255,8 @@ ALTER TABLE tariff.impact_outlook_snapshots
     ADD COLUMN IF NOT EXISTS impact_window_label TEXT,
     ADD COLUMN IF NOT EXISTS impact_window_policy_chunk_id BIGINT REFERENCES tariff.policy_notice_chunks(chunk_id),
     ADD COLUMN IF NOT EXISTS impact_window_policy_citation TEXT,
-    ADD COLUMN IF NOT EXISTS impact_window_policy_chunk_text TEXT;
+    ADD COLUMN IF NOT EXISTS impact_window_policy_chunk_text TEXT,
+    ADD COLUMN IF NOT EXISTS reanalysis_sequence INTEGER;
 
 -- Remove the temporary migration defaults from earlier deployments.  They do
 -- not represent deterministic input or policy evidence and legacy rows stay
@@ -263,6 +266,21 @@ ALTER TABLE tariff.impact_outlook_snapshots
     ALTER COLUMN classification_schedule_version DROP DEFAULT,
     ALTER COLUMN impact_window_policy_citation DROP DEFAULT,
     ALTER COLUMN impact_window_policy_chunk_text DROP DEFAULT;
+
+UPDATE tariff.impact_outlook_snapshots
+SET reanalysis_sequence = 0
+WHERE reanalysis_sequence IS NULL;
+
+ALTER TABLE tariff.impact_outlook_snapshots
+    ALTER COLUMN reanalysis_sequence SET DEFAULT 0,
+    ALTER COLUMN reanalysis_sequence SET NOT NULL;
+
+ALTER TABLE tariff.impact_outlook_snapshots
+    DROP CONSTRAINT IF EXISTS impact_outlook_snapshot_reanalysis_sequence_check;
+
+ALTER TABLE tariff.impact_outlook_snapshots
+    ADD CONSTRAINT impact_outlook_snapshot_reanalysis_sequence_check
+    CHECK (reanalysis_sequence >= 0);
 
 -- Do not silently convert pre-canonical records into valid Outlooks.  The
 -- migration stops until every retained legacy row has real deterministic
@@ -285,11 +303,16 @@ BEGIN
            OR LOWER(BTRIM(COALESCE(analysis_version, ''))) = 'unavailable'
            OR NULLIF(BTRIM(COALESCE(impact_window_label, '')), '') IS NULL
            OR LOWER(BTRIM(COALESCE(impact_window_label, ''))) = 'unavailable'
-           OR impact_window_policy_chunk_id IS NULL
-           OR NULLIF(BTRIM(COALESCE(impact_window_policy_citation, '')), '') IS NULL
-           OR LOWER(BTRIM(COALESCE(impact_window_policy_citation, ''))) = 'unavailable'
-           OR NULLIF(BTRIM(COALESCE(impact_window_policy_chunk_text, '')), '') IS NULL
-           OR LOWER(BTRIM(COALESCE(impact_window_policy_chunk_text, ''))) = 'unavailable'
+           OR (
+                impact_window_start IS NOT NULL
+                AND (
+                    impact_window_policy_chunk_id IS NULL
+                    OR NULLIF(BTRIM(COALESCE(impact_window_policy_citation, '')), '') IS NULL
+                    OR LOWER(BTRIM(COALESCE(impact_window_policy_citation, ''))) = 'unavailable'
+                    OR NULLIF(BTRIM(COALESCE(impact_window_policy_chunk_text, '')), '') IS NULL
+                    OR LOWER(BTRIM(COALESCE(impact_window_policy_chunk_text, ''))) = 'unavailable'
+                )
+            )
     ) THEN
         RAISE EXCEPTION USING
             MESSAGE = 'Impact Outlook migration requires backfilled canonical snapshot versions and policy-window evidence.',
@@ -304,10 +327,12 @@ ALTER TABLE tariff.impact_outlook_snapshots
     ALTER COLUMN enterprise_data_version SET NOT NULL,
     ALTER COLUMN classification_schedule_version SET NOT NULL,
     ALTER COLUMN analysis_version SET NOT NULL,
-    ALTER COLUMN impact_window_label SET NOT NULL,
-    ALTER COLUMN impact_window_policy_chunk_id SET NOT NULL,
-    ALTER COLUMN impact_window_policy_citation SET NOT NULL,
-    ALTER COLUMN impact_window_policy_chunk_text SET NOT NULL;
+    ALTER COLUMN impact_window_label SET NOT NULL;
+
+ALTER TABLE tariff.impact_outlook_snapshots
+    ALTER COLUMN impact_window_policy_chunk_id DROP NOT NULL,
+    ALTER COLUMN impact_window_policy_citation DROP NOT NULL,
+    ALTER COLUMN impact_window_policy_chunk_text DROP NOT NULL;
 
 ALTER TABLE tariff.impact_outlook_snapshots
     DROP CONSTRAINT IF EXISTS impact_outlook_snapshots_processing_state_check;
@@ -341,7 +366,8 @@ ALTER TABLE tariff.impact_outlook_snapshots
         scenario_version,
         enterprise_data_version,
         classification_schedule_version,
-        analysis_version
+        analysis_version,
+        reanalysis_sequence
     );
 
 CREATE INDEX IF NOT EXISTS impact_outlook_notice_idx

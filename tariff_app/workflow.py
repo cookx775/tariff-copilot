@@ -16,6 +16,7 @@ from .outlook import (
     GeneratedOutputValidationError,
     ImpactOutlookSnapshot,
     ToolEvent,
+    validate_policy_notice_snapshot,
 )
 from .retrieval import PolicyEvidenceRetriever
 from .scenario import CLASSIFICATION_SCHEDULE_VERSION, ENTERPRISE_DATA_VERSION, SCENARIO_VERSION
@@ -63,8 +64,10 @@ class TariffWorkflow:
         embedding_service: Any,
         narrative_model: Any = None,
         retry_predecessor_run_id: int | None = None,
+        reanalysis: bool = False,
+        force_reanalysis: bool = False,
     ) -> ImpactOutlookSnapshot:
-        """Return an immutable completed Outlook, never silently recalculating an existing one."""
+        """Return an immutable Outlook; an explicit reanalysis publishes a successor."""
         now = self._clock()
         agent = ImpactOutlookAgent(
             self._repository,
@@ -86,6 +89,9 @@ class TariffWorkflow:
                 },
                 occurred_at=now,
             )
+            if notice.notice_id != notice_id:
+                raise ValueError("Retrieved Policy Notice Snapshot does not match the requested notice.")
+            validate_policy_notice_snapshot(notice)
             current_versions = {
                 "policy_snapshot_version": notice.content_sha256,
                 "scenario_version": SCENARIO_VERSION,
@@ -96,9 +102,14 @@ class TariffWorkflow:
             existing = self._repository.get_complete_impact_outlook_for_notice(
                 notice_id, **current_versions
             )
-            if existing is not None and retry_predecessor_run_id is None:
+            explicit_reanalysis = reanalysis or force_reanalysis
+            if existing is not None and retry_predecessor_run_id is None and not explicit_reanalysis:
                 return existing
-            predecessor = self._repository.get_complete_impact_outlook_for_notice(notice_id)
+            predecessor = (
+                existing
+                if explicit_reanalysis and existing is not None
+                else self._repository.get_complete_impact_outlook_for_notice(notice_id)
+            )
             outlook, tool_events = agent.analyze(
                 notice_id=notice_id,
                 now=now,
@@ -108,6 +119,11 @@ class TariffWorkflow:
                 outlook = replace(
                     outlook,
                     successor_of_outlook_id=predecessor.outlook_id,
+                    reanalysis_sequence=(
+                        existing.reanalysis_sequence + 1
+                        if explicit_reanalysis and existing is not None
+                        else 0
+                    ),
                 )
             agent_run = AgentRun(
                 actor_email=self._actor_email,

@@ -77,9 +77,11 @@ class HTSScopeEvidence:
 @dataclass(frozen=True)
 class PolicyApplicability:
     scope_evidence: PolicyEvidence
-    effective_evidence: PolicyEvidence
+    effective_evidence: Optional[PolicyEvidence]
     hts_scope_evidence: HTSScopeEvidence
-    origin_codes: tuple[str, ...] = (CHINA_ORIGIN_CODE,)
+    origin_codes: tuple[str, ...]
+    effective_date_supported: bool
+    origin_evidence_is_determinate: bool
 
 
 # Keep the issue-11 import name stable while the applicability contract now covers
@@ -140,7 +142,7 @@ class ImpactOutlookSnapshot:
     outlook_status: str
     impact_window_start: Optional[date]
     impact_window_label: str
-    impact_window_policy_evidence: PolicyEvidence
+    impact_window_policy_evidence: Optional[PolicyEvidence]
     annual_spend_exposed: Decimal
     spend_requiring_validation: Decimal
     affected_product_line_count: int
@@ -150,6 +152,7 @@ class ImpactOutlookSnapshot:
     created_at: datetime
     outlook_id: Optional[int] = None
     successor_of_outlook_id: Optional[int] = None
+    reanalysis_sequence: int = 0
 
     def with_persistence(self, *, outlook_id: int, created_at: datetime) -> ImpactOutlookSnapshot:
         return replace(self, outlook_id=outlook_id, created_at=created_at)
@@ -271,7 +274,14 @@ def policy_applicability(
             scope_text=FEATURED_ANNEX_SCOPE.scope_text,
             hts_codes=FEATURED_ANNEX_SCOPE.hts_codes,
         )
-        return PolicyApplicability(scope, effective, hts_scope, (CHINA_ORIGIN_CODE,))
+        return PolicyApplicability(
+            scope,
+            effective,
+            hts_scope,
+            (CHINA_ORIGIN_CODE,),
+            effective_date_supported=True,
+            origin_evidence_is_determinate=True,
+        )
 
     policy_text = "\n\n".join(item.chunk_text for item in scoped_policy)
     effective_date_text = (
@@ -287,11 +297,10 @@ def policy_applicability(
         ),
         None,
     )
-    if effective is None:
-        effective = scoped_policy[0]
     scope = next((item for item in scoped_policy if extract_hts_references(item.chunk_text)), None)
     if scope is None:
         raise ValueError("Policy analysis requires cited HTS scope evidence.")
+    origin_codes = _policy_origin_codes(policy_text)
     return PolicyApplicability(
         scope_evidence=scope,
         effective_evidence=effective,
@@ -302,7 +311,9 @@ def policy_applicability(
             scope_text=scope.chunk_text,
             hts_codes=extract_hts_references(scope.chunk_text),
         ),
-        origin_codes=_policy_origin_codes(policy_text),
+        origin_codes=origin_codes,
+        effective_date_supported=effective is not None,
+        origin_evidence_is_determinate=len(origin_codes) == 1,
     )
 
 
@@ -322,15 +333,11 @@ def validate_policy_notice_snapshot(notice: PolicyNoticeSnapshot) -> None:
         raise ValueError("Policy Notice Snapshot identity is incomplete.")
     if not re.fullmatch(r"[0-9a-fA-F]{64}", notice.content_sha256):
         raise ValueError("Policy Notice Snapshot fingerprint is invalid.")
-    if notice.raw_content:
-        actual_hash = hashlib.sha256(notice.raw_content.encode("utf-8")).hexdigest()
-        if actual_hash != notice.content_sha256:
-            raise ValueError("Policy Notice Snapshot fingerprint does not match its content.")
-
-
-def featured_candidate_component_keys(applicability: PolicyApplicability) -> tuple[str, ...]:
-    """Infer the featured candidates from Annex-backed HTS prefixes, not component-name shortcuts."""
-    return candidate_component_keys(applicability)
+    if not isinstance(notice.raw_content, str) or not notice.raw_content.strip():
+        raise ValueError("Policy Notice Snapshot content is required.")
+    actual_hash = hashlib.sha256(notice.raw_content.encode("utf-8")).hexdigest()
+    if actual_hash != notice.content_sha256:
+        raise ValueError("Policy Notice Snapshot fingerprint does not match its content.")
 
 
 def candidate_component_keys(applicability: PolicyApplicability) -> tuple[str, ...]:
@@ -359,7 +366,10 @@ def build_impact_outlook(
     """Build a complete snapshot from deterministic facts and closed-model template choices."""
     applicability = policy_applicability(notice, policy_evidence)
     base_findings = _deterministic_findings(applicability, exposure_context)
-    justified_actions = justified_action_keys(base_findings)
+    requires_policy_validation = not applicability.effective_date_supported
+    justified_actions = justified_action_keys(
+        base_findings, requires_policy_validation=requires_policy_validation
+    )
     narrative = validate_generated_output(
         generated_output,
         finding_keys=tuple(finding.finding_key for finding in base_findings),
@@ -390,7 +400,11 @@ def build_impact_outlook(
     spend_requiring_validation = sum(
         (relationship_spend[key] for key in validation_keys), Decimal("0.00")
     )
-    outlook_status = _outlook_status(annual_spend_exposed, spend_requiring_validation)
+    outlook_status = _outlook_status(
+        annual_spend_exposed,
+        spend_requiring_validation,
+        requires_policy_validation=requires_policy_validation,
+    )
     created_at = now or datetime.now(timezone.utc)
     return ImpactOutlookSnapshot(
         notice_id=notice.notice_id,
@@ -401,20 +415,26 @@ def build_impact_outlook(
         analysis_version=ANALYSIS_VERSION,
         processing_state="Complete",
         outlook_status=outlook_status,
-        impact_window_start=notice.effective_date,
-        impact_window_label=_impact_window_label(notice.effective_date),
+        impact_window_start=(notice.effective_date if applicability.effective_date_supported else None),
+        impact_window_label=_impact_window_label(
+            notice.effective_date, supported=applicability.effective_date_supported
+        ),
         impact_window_policy_evidence=applicability.effective_evidence,
         annual_spend_exposed=annual_spend_exposed,
         spend_requiring_validation=spend_requiring_validation,
         affected_product_line_count=len(findings),
         executive_brief=_executive_brief(narrative.executive_brief, outlook_status),
         findings=findings,
-        recommended_actions=_recommended_actions(justified_actions, findings),
+        recommended_actions=_recommended_actions(
+            justified_actions, findings, requires_policy_validation=requires_policy_validation
+        ),
         created_at=created_at,
     )
 
 
-def justified_action_keys(findings: Sequence[ImpactFinding]) -> tuple[str, ...]:
+def justified_action_keys(
+    findings: Sequence[ImpactFinding], *, requires_policy_validation: bool = False
+) -> tuple[str, ...]:
     """Single action policy: evidence justifies actions; models only order them."""
     has_validation = any(
         bundle.match_confidence == "Needs validation"
@@ -427,7 +447,7 @@ def justified_action_keys(findings: Sequence[ImpactFinding]) -> tuple[str, ...]:
         for bundle in finding.evidence_bundles
     )
     actions: list[str] = []
-    if has_validation:
+    if has_validation or requires_policy_validation:
         actions.append("validate_classification_or_origin")
     if has_exposure:
         actions.extend(("request_supplier_confirmation_or_quote", "evaluate_alternate_sourcing"))
@@ -498,8 +518,6 @@ def _deterministic_findings(
                 assertion
             )
         for relationship in context.supply_relationships:
-            if relationship.origin_code not in applicability.origin_codes:
-                continue
             current_assertions = tuple(
                 assertion
                 for assertion in assertions_by_relationship.get(
@@ -516,7 +534,14 @@ def _deterministic_findings(
             )
             if not applicable:
                 continue
-            confidence = _match_confidence(applicable, current_assertions)
+            if applicability.origin_evidence_is_determinate:
+                if relationship.origin_code not in applicability.origin_codes:
+                    continue
+                confidence = _match_confidence(applicable, current_assertions)
+            else:
+                # A policy scope without one supported origin cannot prove a negative.
+                # Preserve the applicable relationship as validation spend instead.
+                confidence = "Needs validation"
             if confidence is None:
                 continue
             evidence = tuple(
@@ -587,7 +612,10 @@ def _match_confidence(
 
 
 def _recommended_actions(
-    action_keys: Sequence[str], findings: Sequence[ImpactFinding]
+    action_keys: Sequence[str],
+    findings: Sequence[ImpactFinding],
+    *,
+    requires_policy_validation: bool = False,
 ) -> tuple[RecommendedAction, ...]:
     has_direct = any(
         bundle.match_confidence in {"Direct match", "Likely match"}
@@ -599,7 +627,10 @@ def _recommended_actions(
             action_key=key,
             title=APPROVED_ACTIONS[key],
             priority=index,
-            is_conditional=(not has_direct and key != "validate_classification_or_origin"),
+            is_conditional=(
+                (not has_direct or requires_policy_validation)
+                and key != "validate_classification_or_origin"
+            ),
             evidence_relationship_keys=_action_relationship_scope(key, findings),
         )
         for index, key in enumerate(action_keys, start=1)
@@ -699,7 +730,11 @@ def _unique_spend(bundles: Sequence[EvidenceBundle], confidence: set[str]) -> De
     return sum(amounts.values(), Decimal("0.00"))
 
 
-def _outlook_status(exposed: Decimal, validation: Decimal) -> str:
+def _outlook_status(
+    exposed: Decimal, validation: Decimal, *, requires_policy_validation: bool = False
+) -> str:
+    if requires_policy_validation:
+        return "Validation required"
     if exposed > 0:
         return "Action recommended"
     if validation > 0:
@@ -715,9 +750,9 @@ def _executive_brief(generated_brief: str, outlook_status: str) -> str:
     return generated_brief
 
 
-def _impact_window_label(effective_date: Optional[date]) -> str:
-    if effective_date is None:
-        return "Requires validation: the policy notice does not state an effective date."
+def _impact_window_label(effective_date: Optional[date], *, supported: bool) -> str:
+    if not supported:
+        return "Requires validation: retrieved policy evidence does not support an effective date."
     return (
         f"Policy-supported Impact Window: effective beginning {effective_date.isoformat()}. "
         "This does not predict a supplier price-change date."

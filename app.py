@@ -214,7 +214,12 @@ def render_impact_outlook(outlook) -> None:
     st.markdown("#### Impact brief")
     st.write(outlook.executive_brief)
     st.caption(outlook.impact_window_label)
-    st.caption(f"Impact Window evidence: {outlook.impact_window_policy_evidence.citation}")
+    if outlook.impact_window_policy_evidence is None:
+        st.caption(
+            "Impact Window evidence: requires validation; no effective-date evidence was retrieved."
+        )
+    else:
+        st.caption(f"Impact Window evidence: {outlook.impact_window_policy_evidence.citation}")
 
     st.markdown("#### Decision metrics")
     metrics = st.columns(3)
@@ -285,13 +290,19 @@ def render_featured_outlook(workflow: TariffWorkflow, notices) -> None:
     )
     selected_notice_id = labels[selected_label]
     outlook = workflow.impact_outlook(selected_notice_id)
-    if outlook is None and st.button("Generate Impact Outlook", use_container_width=True):
+    is_reanalysis = outlook is not None
+    button_label = "Create reanalysis successor" if is_reanalysis else "Generate Impact Outlook"
+    if st.button(button_label, use_container_width=True):
         try:
             workflow.analyze_policy_notice(
                 selected_notice_id,
                 embedding_service=EmbeddingService(),
+                reanalysis=is_reanalysis,
             )
-            st.success("Complete immutable Impact Outlook Snapshot is ready.")
+            if is_reanalysis:
+                st.success("A linked immutable Impact Outlook successor is ready.")
+            else:
+                st.success("Complete immutable Impact Outlook Snapshot is ready.")
         except ValueError as error:
             st.error(str(error))
         except Exception:
