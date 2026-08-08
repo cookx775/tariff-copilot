@@ -13,6 +13,7 @@ from .outlook import (
     PROMPT_VERSION,
     TOOL_VERSIONS,
     AgentRun,
+    GeneratedOutputValidationError,
     ImpactOutlookSnapshot,
     ToolEvent,
 )
@@ -95,7 +96,7 @@ class TariffWorkflow:
             existing = self._repository.get_complete_impact_outlook_for_notice(
                 notice_id, **current_versions
             )
-            if existing is not None:
+            if existing is not None and retry_predecessor_run_id is None:
                 return existing
             predecessor = self._repository.get_complete_impact_outlook_for_notice(notice_id)
             outlook, tool_events = agent.analyze(
@@ -132,7 +133,7 @@ class TariffWorkflow:
             if isinstance(error, AnalysisAttemptError):
                 failed_notice = error.notice
                 tool_events = error.tool_events
-                boundary = "retrieval_or_validation"
+                boundary = _analysis_failure_boundary(error)
             elif notice is None:
                 # The pre-analysis snapshot/lookup reads failed before an Outlook could
                 # exist. Preserve that as an explicit pre-snapshot attempt rather than
@@ -211,3 +212,9 @@ class TariffWorkflow:
 
     def list_diagnostics(self, *, limit: int = 10) -> list[DiagnosticRecord]:
         return self._repository.list_diagnostics(limit=limit)
+
+
+def _analysis_failure_boundary(error: AnalysisAttemptError) -> str:
+    if isinstance(error.__cause__, GeneratedOutputValidationError):
+        return "generated_output_validation"
+    return "retrieval_or_validation"

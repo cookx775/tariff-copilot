@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, datetime, timezone
@@ -8,10 +10,12 @@ from typing import Any, Optional
 
 from .models import ExposureContext, PolicyNoticeSnapshot, PolicySearchResult, ProvenanceRecord
 from .pinned_evidence import load_featured_annex_scope
+from .policy import extract_hts_references
 from .scenario import (
     CLASSIFICATION_SCHEDULE_VERSION,
     DEMONSTRATION_SCENARIO,
     ENTERPRISE_DATA_VERSION,
+    SCENARIO_VERSION,
 )
 
 ANALYSIS_VERSION = "impact-outlook.v1"
@@ -71,10 +75,16 @@ class HTSScopeEvidence:
 
 
 @dataclass(frozen=True)
-class FeaturedApplicability:
+class PolicyApplicability:
     scope_evidence: PolicyEvidence
     effective_evidence: PolicyEvidence
     hts_scope_evidence: HTSScopeEvidence
+    origin_codes: tuple[str, ...] = (CHINA_ORIGIN_CODE,)
+
+
+# Keep the issue-11 import name stable while the applicability contract now covers
+# both featured and ordinary Policy Notice Snapshots.
+FeaturedApplicability = PolicyApplicability
 
 
 @dataclass(frozen=True)
@@ -193,8 +203,20 @@ NARRATIVE_TEMPLATES = {
         "Policy-supported exposure warrants a focused sourcing response, with a separate "
         "validation boundary before dependent decisions proceed."
     ),
+    "validation_required_brief": (
+        "Potential exposure remains subject to missing or conflicting evidence. Validate the "
+        "assumption because an incorrect assumption could misdirect dependent sourcing "
+        "decisions."
+    ),
+    "negative_no_exposure_brief": (
+        "The policy scope was assessed against the Demonstration Scenario; no actionable "
+        "exposure was identified."
+    ),
     "finding_supported_path": "The cited policy scope and deterministic scenario path support this finding.",
-    "finding_validation_boundary": "This illustrative scenario assessment does not predict a price change or provide a legal determination.",
+    "finding_validation_boundary": (
+        "Missing or conflicting evidence may change this finding; validate the assumption "
+        "before treating it as confirmed exposure or using dependent sourcing actions."
+    ),
 }
 
 
@@ -215,47 +237,112 @@ class BoundedNarrativeModel:
         }
 
 
-def featured_applicability(
+def policy_applicability(
     notice: PolicyNoticeSnapshot, evidence: Sequence[PolicySearchResult]
-) -> FeaturedApplicability:
-    """Validate the fixed source, scope, effective passage, and Annex-backed HTS scope."""
-    if not notice.is_featured or notice.source_identifier != FEATURED_POLICY_SOURCE_IDENTIFIER:
-        raise ValueError("Featured analysis requires Federal Register notice 2018-20610.")
-    if notice.effective_date != FEATURED_EFFECTIVE_DATE:
-        raise ValueError(
-            "Featured analysis requires the policy-supported 2018-09-24 effective date."
+) -> PolicyApplicability:
+    """Validate one immutable notice and derive policy evidence for its analysis."""
+    validate_policy_notice_snapshot(notice)
+    scoped = [item for item in evidence if _matches_snapshot(notice, item)]
+    if not scoped:
+        raise ValueError("Policy evidence does not belong to the requested notice snapshot.")
+
+    scoped_policy = [_policy_evidence(item) for item in scoped]
+    if notice.is_featured:
+        if notice.source_identifier != FEATURED_POLICY_SOURCE_IDENTIFIER:
+            raise ValueError("Featured analysis requires Federal Register notice 2018-20610.")
+        if notice.effective_date != FEATURED_EFFECTIVE_DATE:
+            raise ValueError(
+                "Featured analysis requires the policy-supported 2018-09-24 effective date."
+            )
+        scope = next(
+            (item for item in scoped_policy if _SCOPE_PASSAGE in item.chunk_text.lower()), None
         )
-    scoped = [_policy_evidence(item) for item in evidence if _matches_snapshot(notice, item)]
-    scope = next((item for item in scoped if _SCOPE_PASSAGE in item.chunk_text.lower()), None)
-    effective = next(
-        (item for item in scoped if _EFFECTIVE_PASSAGE in item.chunk_text.lower()), None
-    )
-    if scope is None or effective is None:
-        raise ValueError(
-            "Featured analysis requires exact policy-scope and effective-date passages."
+        effective = next(
+            (item for item in scoped_policy if _EFFECTIVE_PASSAGE in item.chunk_text.lower()), None
         )
-    return FeaturedApplicability(
-        scope,
-        effective,
-        HTSScopeEvidence(
+        if scope is None or effective is None:
+            raise ValueError(
+                "Featured analysis requires exact policy-scope and effective-date passages."
+            )
+        hts_scope = HTSScopeEvidence(
             citation=FEATURED_ANNEX_SCOPE.citation,
             canonical_url=FEATURED_ANNEX_SCOPE.source_url,
             source_sha256=FEATURED_ANNEX_SCOPE.source_sha256,
             scope_text=FEATURED_ANNEX_SCOPE.scope_text,
             hts_codes=FEATURED_ANNEX_SCOPE.hts_codes,
+        )
+        return PolicyApplicability(scope, effective, hts_scope, (CHINA_ORIGIN_CODE,))
+
+    policy_text = "\n\n".join(item.chunk_text for item in scoped_policy)
+    effective_date_text = (
+        notice.effective_date.strftime("%B %-d, %Y").lower()
+        if notice.effective_date is not None
+        else ""
+    )
+    effective = next(
+        (
+            item
+            for item in scoped_policy
+            if effective_date_text and effective_date_text in item.chunk_text.lower()
         ),
+        None,
+    )
+    if effective is None:
+        effective = scoped_policy[0]
+    scope = next((item for item in scoped_policy if extract_hts_references(item.chunk_text)), None)
+    if scope is None:
+        raise ValueError("Policy analysis requires cited HTS scope evidence.")
+    return PolicyApplicability(
+        scope_evidence=scope,
+        effective_evidence=effective,
+        hts_scope_evidence=HTSScopeEvidence(
+            citation=scope.citation,
+            canonical_url=scope.canonical_url,
+            source_sha256=notice.content_sha256,
+            scope_text=scope.chunk_text,
+            hts_codes=extract_hts_references(scope.chunk_text),
+        ),
+        origin_codes=_policy_origin_codes(policy_text),
     )
 
 
-def featured_candidate_component_keys(applicability: FeaturedApplicability) -> tuple[str, ...]:
+def featured_applicability(
+    notice: PolicyNoticeSnapshot, evidence: Sequence[PolicySearchResult]
+) -> PolicyApplicability:
+    """Backward-compatible featured-only applicability seam."""
+    applicability = policy_applicability(notice, evidence)
+    if not notice.is_featured:
+        raise ValueError("Featured analysis requires a featured Policy Notice Snapshot.")
+    return applicability
+
+
+def validate_policy_notice_snapshot(notice: PolicyNoticeSnapshot) -> None:
+    """Reject an incomplete or internally inconsistent immutable source snapshot."""
+    if not notice.source_identifier.strip() or not notice.canonical_url.strip():
+        raise ValueError("Policy Notice Snapshot identity is incomplete.")
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", notice.content_sha256):
+        raise ValueError("Policy Notice Snapshot fingerprint is invalid.")
+    if notice.raw_content:
+        actual_hash = hashlib.sha256(notice.raw_content.encode("utf-8")).hexdigest()
+        if actual_hash != notice.content_sha256:
+            raise ValueError("Policy Notice Snapshot fingerprint does not match its content.")
+
+
+def featured_candidate_component_keys(applicability: PolicyApplicability) -> tuple[str, ...]:
     """Infer the featured candidates from Annex-backed HTS prefixes, not component-name shortcuts."""
+    return candidate_component_keys(applicability)
+
+
+def candidate_component_keys(applicability: PolicyApplicability) -> tuple[str, ...]:
+    """Select only scenario Components whose active classification is policy-applicable."""
     return tuple(
         sorted(
             {
                 assertion.component_key
                 for assertion in DEMONSTRATION_SCENARIO.classification_assertions
                 if assertion.state != "superseded"
-                and _matches_featured_hts(assertion.hts_code, applicability.hts_scope_evidence)
+                and assertion.hts_code in applicability.hts_scope_evidence.hts_codes
+                and assertion.hts_code in applicability.hts_scope_evidence.scope_text
             }
         )
     )
@@ -270,9 +357,7 @@ def build_impact_outlook(
     now: Optional[datetime] = None,
 ) -> ImpactOutlookSnapshot:
     """Build a complete snapshot from deterministic facts and closed-model template choices."""
-    applicability = featured_applicability(notice, policy_evidence)
-    if not exposure_context:
-        raise ValueError("Impact Outlook requires bounded Demonstration Scenario exposure context.")
+    applicability = policy_applicability(notice, policy_evidence)
     base_findings = _deterministic_findings(applicability, exposure_context)
     justified_actions = justified_action_keys(base_findings)
     narrative = validate_generated_output(
@@ -305,23 +390,24 @@ def build_impact_outlook(
     spend_requiring_validation = sum(
         (relationship_spend[key] for key in validation_keys), Decimal("0.00")
     )
+    outlook_status = _outlook_status(annual_spend_exposed, spend_requiring_validation)
     created_at = now or datetime.now(timezone.utc)
     return ImpactOutlookSnapshot(
         notice_id=notice.notice_id,
         policy_snapshot_version=notice.content_sha256,
-        scenario_version=exposure_context[0].scenario_version,
+        scenario_version=(exposure_context[0].scenario_version if exposure_context else SCENARIO_VERSION),
         enterprise_data_version=ENTERPRISE_DATA_VERSION,
         classification_schedule_version=CLASSIFICATION_SCHEDULE_VERSION,
         analysis_version=ANALYSIS_VERSION,
         processing_state="Complete",
-        outlook_status=_outlook_status(annual_spend_exposed, spend_requiring_validation),
+        outlook_status=outlook_status,
         impact_window_start=notice.effective_date,
         impact_window_label=_impact_window_label(notice.effective_date),
         impact_window_policy_evidence=applicability.effective_evidence,
         annual_spend_exposed=annual_spend_exposed,
         spend_requiring_validation=spend_requiring_validation,
         affected_product_line_count=len(findings),
-        executive_brief=narrative.executive_brief,
+        executive_brief=_executive_brief(narrative.executive_brief, outlook_status),
         findings=findings,
         recommended_actions=_recommended_actions(justified_actions, findings),
         created_at=created_at,
@@ -402,7 +488,7 @@ def validate_generated_output(
 
 
 def _deterministic_findings(
-    applicability: FeaturedApplicability, contexts: Sequence[ExposureContext]
+    applicability: PolicyApplicability, contexts: Sequence[ExposureContext]
 ) -> tuple[ImpactFinding, ...]:
     grouped: dict[str, tuple[Any, list[EvidenceBundle]]] = {}
     for context in contexts:
@@ -412,7 +498,7 @@ def _deterministic_findings(
                 assertion
             )
         for relationship in context.supply_relationships:
-            if relationship.origin_code != CHINA_ORIGIN_CODE:
+            if relationship.origin_code not in applicability.origin_codes:
                 continue
             current_assertions = tuple(
                 assertion
@@ -426,7 +512,7 @@ def _deterministic_findings(
             applicable = tuple(
                 assertion
                 for assertion in current_assertions
-                if _matches_featured_hts(assertion.hts_code, applicability.hts_scope_evidence)
+                if _matches_policy_hts(assertion.hts_code, applicability.hts_scope_evidence)
             )
             if not applicable:
                 continue
@@ -479,8 +565,6 @@ def _deterministic_findings(
         )
         for key, (product_line, bundles) in sorted(grouped.items())
     )
-    if not findings:
-        raise ValueError("No published Impact Finding met the featured applicability contract.")
     return findings
 
 
@@ -564,11 +648,25 @@ def _policy_evidence(result: PolicySearchResult) -> PolicyEvidence:
 
 
 def _matches_snapshot(notice: PolicyNoticeSnapshot, result: PolicySearchResult) -> bool:
-    return result.notice_id == notice.notice_id
+    return (
+        result.notice_id == notice.notice_id
+        and result.source_identifier == notice.source_identifier
+        and result.canonical_url == notice.canonical_url
+    )
 
 
-def _matches_featured_hts(code: str, evidence: HTSScopeEvidence) -> bool:
+def _matches_policy_hts(code: str, evidence: HTSScopeEvidence) -> bool:
     return code in evidence.hts_codes and code in evidence.scope_text
+
+
+def _policy_origin_codes(policy_text: str) -> tuple[str, ...]:
+    origin_names = {
+        "china": "CN",
+        "people's republic of china": "CN",
+        "united states": "US",
+    }
+    lowered = policy_text.lower()
+    return tuple(sorted({code for name, code in origin_names.items() if name in lowered}))
 
 
 def _resolve_finding_templates(
@@ -607,6 +705,14 @@ def _outlook_status(exposed: Decimal, validation: Decimal) -> str:
     if validation > 0:
         return "Validation required"
     return "No actionable exposure identified"
+
+
+def _executive_brief(generated_brief: str, outlook_status: str) -> str:
+    if outlook_status == "Validation required":
+        return NARRATIVE_TEMPLATES["validation_required_brief"]
+    if outlook_status == "No actionable exposure identified":
+        return NARRATIVE_TEMPLATES["negative_no_exposure_brief"]
+    return generated_brief
 
 
 def _impact_window_label(effective_date: Optional[date]) -> str:

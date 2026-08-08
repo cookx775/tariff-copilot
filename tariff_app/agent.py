@@ -9,8 +9,9 @@ from .outlook import (
     BoundedNarrativeModel,
     ToolEvent,
     build_impact_outlook,
-    featured_applicability,
-    featured_candidate_component_keys,
+    candidate_component_keys,
+    policy_applicability,
+    validate_policy_notice_snapshot,
 )
 from .retrieval import PolicyEvidenceRetriever
 
@@ -67,10 +68,11 @@ class ImpactOutlookAgent:
                 event = self._snapshot_event(notice, notice_id=notice_id, now=now)
             self._notice = notice
             self._tool_events.append(event)
+            validate_policy_notice_snapshot(notice)
             evidence, event = self.find_exposure_candidates(notice, now=now)
             self._tool_events.append(event)
-            applicability = featured_applicability(notice, evidence)
-            component_keys = featured_candidate_component_keys(applicability)
+            applicability = policy_applicability(notice, evidence)
+            component_keys = candidate_component_keys(applicability)
             context, event = self.retrieve_demonstration_scenario_context(component_keys, now=now)
             self._tool_events.append(event)
             generated = self._narrative_model.generate(finding_keys=_finding_keys(context))
@@ -110,8 +112,13 @@ class ImpactOutlookAgent:
         )
 
     def find_exposure_candidates(self, notice: Any, *, now: datetime):
+        query = (
+            "Section 301 China Annex A HTS policy scope and effective date"
+            if notice.is_featured
+            else f"{notice.title} policy scope HTS effective date country of origin"
+        )
         evidence = PolicyEvidenceRetriever(self._repository, self._embedding_service).search(
-            "Section 301 China Annex A HTS policy scope and effective date",
+            query,
             notice_id=notice.notice_id,
             top_k=8,
         )
@@ -131,9 +138,9 @@ class ImpactOutlookAgent:
     def retrieve_demonstration_scenario_context(
         self, component_keys: tuple[str, ...], *, now: datetime
     ):
-        if not component_keys:
-            raise ValueError("No deterministic exposure candidates were found for this notice.")
-        context = self._repository.retrieve_exposure_context(component_keys)
+        context = (
+            self._repository.retrieve_exposure_context(component_keys) if component_keys else []
+        )
         if len(context) != len(component_keys):
             raise ValueError("Retrieve Exposure Context did not return every selected Component.")
         return context, ToolEvent(

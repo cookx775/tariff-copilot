@@ -21,6 +21,8 @@ from tariff_app.outlook import (
     build_impact_outlook,
     validate_generated_output,
 )
+from tariff_app.pinned_evidence import load_pinned_demonstration_notice_set
+from tariff_app.policy import chunk_policy_notice
 from tariff_app.workflow import TariffWorkflow
 
 NOW = datetime(2026, 8, 8, 1, 0, tzinfo=timezone.utc)
@@ -84,6 +86,61 @@ def effective_date_evidence():
         start_offset=467,
         end_offset=570,
     )
+
+
+def negative_notice():
+    source = next(
+        notice
+        for notice in load_pinned_demonstration_notice_set()
+        if notice.source_identifier == "2026-01193"
+    )
+    return PolicyNoticeSnapshot(
+        notice_id=18,
+        source_identifier=source.source_identifier,
+        title=source.title,
+        agency=source.agency,
+        canonical_url=source.canonical_url,
+        publication_date=source.publication_date,
+        effective_date=source.effective_date,
+        retrieved_at=NOW,
+        content_sha256=source.content_sha256,
+        is_featured=source.is_featured,
+        raw_content=source.raw_content,
+        normalized_text=source.normalized_text,
+        source_provenance=source.source_provenance,
+        analysis_state=source.analysis_state,
+    )
+
+
+def negative_evidence():
+    source = next(
+        notice
+        for notice in load_pinned_demonstration_notice_set()
+        if notice.source_identifier == "2026-01193"
+    )
+    chunks = chunk_policy_notice(source)
+    selected = [
+        chunk
+        for chunk in chunks
+        if "Applicable January 22, 2026" in chunk.chunk_text
+        or "2922.41" in chunk.chunk_text
+    ]
+    return [
+        PolicySearchResult(
+            notice_id=18,
+            source_identifier=source.source_identifier,
+            canonical_url=source.canonical_url,
+            publication_date=source.publication_date,
+            chunk_id=191 + chunk.chunk_index,
+            chunk_index=chunk.chunk_index,
+            section_title=chunk.section_title,
+            chunk_text=chunk.chunk_text,
+            start_offset=chunk.start_offset,
+            end_offset=chunk.end_offset,
+            similarity=0.96,
+        )
+        for chunk in selected
+    ]
 
 
 def exposure_context():
@@ -242,6 +299,38 @@ class FeaturedRepository:
         self.persisted = (outlook, agent_run)
         self.existing = outlook.with_persistence(outlook_id=44, created_at=NOW)
         return self.existing
+
+
+class NegativeRepository(FeaturedRepository):
+    def __init__(self):
+        super().__init__()
+        self.notice = negative_notice()
+
+    def search_policy_evidence(self, embedding, *, top_k, notice_id):
+        self.calls.append(("semantic", notice_id, top_k, embedding))
+        return negative_evidence()
+
+
+def test_negative_l_lysine_workflow_publishes_a_complete_zero_exposure_snapshot():
+    repository = NegativeRepository()
+    embeddings = Embeddings()
+    workflow = TariffWorkflow(repository, actor_email="manager@example.com", clock=lambda: NOW)
+
+    outlook = workflow.analyze_policy_notice(18, embedding_service=embeddings)
+
+    assert outlook.processing_state == "Complete"
+    assert outlook.outlook_status == "No actionable exposure identified"
+    assert outlook.annual_spend_exposed == Decimal("0.00")
+    assert outlook.spend_requiring_validation == Decimal("0.00")
+    assert outlook.findings == ()
+    assert outlook.recommended_actions == ()
+    assert "no actionable exposure" in outlook.executive_brief.lower()
+    assert "L-Lysine" in embeddings.queries[0]
+    assert [event.tool_name for event in repository.persisted[1].tool_events] == [
+        "retrieve_policy_notice_snapshot",
+        "find_exposure_candidates",
+        "retrieve_demonstration_scenario_context",
+    ]
 
 
 def test_featured_workflow_publishes_complete_deduplicated_evidence_backed_snapshot():
@@ -404,6 +493,26 @@ def test_pre_snapshot_failure_records_an_explicit_unobtained_snapshot_attempt():
     assert failed_run.policy_snapshot_version is None
     assert failed_run.error_boundary == "retrieval_or_validation"
     assert failed_run.tool_events == ()
+
+
+def test_retrieval_timeout_records_failed_processing_without_publishing():
+    class TimeoutEmbeddings:
+        def embed_query(self, query):
+            raise TimeoutError("embedding timed out")
+
+    repository = FeaturedRepository()
+    workflow = TariffWorkflow(repository, actor_email="manager@example.com", clock=lambda: NOW)
+
+    with pytest.raises(ValueError, match="embedding timed out"):
+        workflow.analyze_policy_notice(17, embedding_service=TimeoutEmbeddings())
+
+    assert repository.persisted is None
+    failed_run = repository.failed_runs[0]
+    assert failed_run.processing_state == "Failed"
+    assert failed_run.error_boundary == "retrieval_or_validation"
+    assert [event.tool_name for event in failed_run.tool_events] == [
+        "retrieve_policy_notice_snapshot"
+    ]
 
 
 def test_post_snapshot_lookup_failure_retains_the_obtained_snapshot_and_event():
@@ -584,6 +693,29 @@ def test_scope_gaps_or_conflicts_cannot_publish_a_direct_match(changed_context):
     assert outlook.spend_requiring_validation >= Decimal("3000000.00")
 
 
+def test_unmatched_china_context_is_excluded_without_policy_classification_evidence():
+    original = exposure_context()[0]
+    unmatched = replace(
+        original,
+        classification_assertions=(
+            replace(original.classification_assertions[0], hts_code="8419.90.10"),
+        ),
+    )
+
+    outlook = build_impact_outlook(
+        notice=featured_notice(),
+        policy_evidence=[section_301_evidence(), effective_date_evidence()],
+        exposure_context=[unmatched],
+        generated_output=BoundedNarrativeModel().generate(finding_keys=()),
+        now=NOW,
+    )
+
+    assert outlook.processing_state == "Complete"
+    assert outlook.outlook_status == "No actionable exposure identified"
+    assert outlook.findings == ()
+    assert outlook.recommended_actions == ()
+
+
 def test_validation_only_outlook_retains_a_conditional_dependent_action_without_padding():
     outlook = build_impact_outlook(
         notice=featured_notice(),
@@ -602,6 +734,8 @@ def test_validation_only_outlook_retains_a_conditional_dependent_action_without_
     ]
     assert outlook.recommended_actions[0].is_conditional is False
     assert outlook.recommended_actions[1].is_conditional is True
+    assert "missing or conflicting evidence" in outlook.executive_brief.lower()
+    assert "incorrect assumption" in outlook.executive_brief.lower()
 
 
 def test_current_assertions_are_executed_when_filtering_exact_featured_hts_scope():
@@ -681,3 +815,88 @@ def test_persistence_failure_records_a_failed_run_without_a_partial_outlook():
     assert failed_run.notice_id == 17
     assert failed_run.policy_snapshot_version == "f" * 64
     assert [event.event_index for event in failed_run.tool_events] == [1, 2, 3]
+
+
+def test_invalid_snapshot_fingerprint_records_failure_without_running_analysis():
+    class InvalidFingerprintRepository(FeaturedRepository):
+        def __init__(self):
+            super().__init__()
+            self.notice = replace(self.notice, content_sha256="not-a-sha256")
+
+    repository = InvalidFingerprintRepository()
+    workflow = TariffWorkflow(repository, actor_email="manager@example.com", clock=lambda: NOW)
+
+    with pytest.raises(ValueError, match="fingerprint"):
+        workflow.analyze_policy_notice(17, embedding_service=Embeddings())
+
+    assert repository.persisted is None
+    assert len(repository.failed_runs) == 1
+    assert repository.failed_runs[0].processing_state == "Failed"
+    assert repository.failed_runs[0].snapshot_obtained is True
+    assert [event.tool_name for event in repository.failed_runs[0].tool_events] == [
+        "retrieve_policy_notice_snapshot"
+    ]
+
+
+def test_invalid_generated_structure_records_failed_processing_without_publishing():
+    class InvalidNarrativeModel:
+        model_version = "invalid-model"
+        prompt_version = "invalid-prompt"
+
+        def generate(self, *, finding_keys):
+            return {"unsupported": True}
+
+    repository = FeaturedRepository()
+    workflow = TariffWorkflow(repository, actor_email="manager@example.com", clock=lambda: NOW)
+
+    with pytest.raises(ValueError, match="unsupported field"):
+        workflow.analyze_policy_notice(
+            17,
+            embedding_service=Embeddings(),
+            narrative_model=InvalidNarrativeModel(),
+        )
+
+    assert repository.persisted is None
+    failed_run = repository.failed_runs[0]
+    assert failed_run.processing_state == "Failed"
+    assert failed_run.snapshot_obtained is True
+    assert failed_run.error_boundary == "generated_output_validation"
+
+
+def test_explicit_retry_creates_a_new_run_after_a_failed_persistence_attempt():
+    class RetryRepository(FeaturedRepository):
+        def __init__(self):
+            super().__init__()
+            self.fail_persist = True
+            self.runs = []
+
+        def append_agent_run(self, agent_run):
+            persisted = replace(agent_run, agent_run_id=70 + len(self.runs))
+            self.runs.append(persisted)
+            self.failed_runs.append(persisted)
+            return persisted
+
+        def persist_impact_outlook(self, *, outlook, agent_run):
+            if self.fail_persist:
+                self.fail_persist = False
+                raise RuntimeError("database write interrupted")
+            self.persisted = (outlook, agent_run)
+            self.existing = outlook.with_persistence(outlook_id=44, created_at=NOW)
+            return self.existing
+
+    repository = RetryRepository()
+    workflow = TariffWorkflow(repository, actor_email="manager@example.com", clock=lambda: NOW)
+
+    with pytest.raises(RuntimeError, match="database write"):
+        workflow.analyze_policy_notice(17, embedding_service=Embeddings())
+
+    failed_run_id = repository.runs[0].agent_run_id
+    retried = workflow.analyze_policy_notice(
+        17,
+        embedding_service=Embeddings(),
+        retry_predecessor_run_id=failed_run_id,
+    )
+
+    assert retried.processing_state == "Complete"
+    assert len(repository.runs) == 1
+    assert repository.persisted[1].retry_predecessor_run_id == failed_run_id
