@@ -29,3 +29,10 @@ def test_app_runtime_configures_the_verified_embedding_endpoint():
 
     assert "DATABRICKS_EMBEDDING_ENDPOINT" in app_config
     assert "databricks-qwen3-embedding-0-6b" in app_config
+
+
+def test_deployed_runtime_validates_schema_without_applying_owner_only_migrations():
+    app_source = (Path(__file__).parents[1] / "app.py").read_text()
+
+    assert "repo.verify_runtime_schema()" in app_source
+    assert "repo.initialize()" not in app_source

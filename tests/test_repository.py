@@ -4,6 +4,9 @@ from dataclasses import replace
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
+import pytest
+
+from tariff_app.db import DatabaseConfigurationError
 from tariff_app.models import (
     DiagnosticRecord,
     PolicyEmbeddingRecord,
@@ -146,6 +149,26 @@ def test_initialize_skips_existing_indexes_when_table_ownership_is_reused():
     assert ("tariff.app_diagnostics_created_idx",) in [
         params for query, params in cursor.executions if "to_regclass" in query
     ]
+
+
+def test_runtime_schema_verification_is_read_only_for_reused_table_ownership():
+    cursor = FakeCursor([[]])
+    repository = TariffRepository(FakePool(cursor))
+
+    repository.verify_runtime_schema()
+
+    sql = "\n".join(query for query, _params in cursor.executions)
+    assert "to_regclass" in sql
+    assert "CREATE " not in sql
+    assert "ALTER " not in sql
+
+
+def test_runtime_schema_verification_reports_missing_relations():
+    cursor = FakeCursor([[{"name": "tariff.impact_outlook_snapshots"}]])
+    repository = TariffRepository(FakePool(cursor))
+
+    with pytest.raises(DatabaseConfigurationError, match="impact_outlook_snapshots"):
+        repository.verify_runtime_schema()
 
 
 def test_record_diagnostic_is_parameterized_and_returns_a_domain_record():

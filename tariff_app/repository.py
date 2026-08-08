@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from .db import DatabaseConfigurationError
 from .models import (
     ClassificationAssertionContext,
     DiagnosticRecord,
@@ -59,6 +60,31 @@ OUTLOOK_COLUMNS = (
 )
 INDEX_NAME_PATTERN = re.compile(r"^CREATE INDEX IF NOT EXISTS ([A-Za-z0-9_]+)", re.IGNORECASE)
 MAX_CONTEXT_COMPONENTS = 20
+RUNTIME_REQUIRED_RELATIONS = (
+    "tariff.app_diagnostics",
+    "tariff.policy_notice_snapshots",
+    "tariff.policy_notice_chunks",
+    "tariff.policy_notice_embeddings",
+    "tariff.scenario_versions",
+    "tariff.enterprise_segments",
+    "tariff.product_lines",
+    "tariff.components",
+    "tariff.bom_relationships",
+    "tariff.suppliers",
+    "tariff.countries_of_origin",
+    "tariff.supply_relationships",
+    "tariff.classification_assertions",
+    "tariff.impact_outlook_snapshots",
+    "tariff.impact_findings",
+    "tariff.impact_finding_evidence_bundles",
+    "tariff.recommended_actions",
+    "tariff.sourcing_review_approvals",
+    "tariff.sourcing_reviews",
+    "tariff.sourcing_review_scope_links",
+    "tariff.agent_runs",
+    "tariff.agent_tool_events",
+    "tariff.agent_actions",
+)
 
 
 class RecordNotFound(LookupError):
@@ -149,6 +175,26 @@ class TariffRepository:
                     continue
                 cursor.execute(statement)
         self.seed_demonstration_scenario()
+
+    def verify_runtime_schema(self) -> None:
+        """Validate owner-provisioned relations without issuing runtime DDL."""
+        with self._pool.connection() as connection, connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT name
+                FROM unnest(%s::text[]) AS required(name)
+                WHERE to_regclass(name) IS NULL
+                ORDER BY name
+                """,
+                (list(RUNTIME_REQUIRED_RELATIONS),),
+            )
+            missing = [row["name"] for row in cursor.fetchall()]
+        if missing:
+            relation_list = ", ".join(missing)
+            raise DatabaseConfigurationError(
+                "Lakebase schema is not ready. Missing required relation(s): "
+                f"{relation_list}. Apply sql/schema.sql as the schema owner before starting the app."
+            )
 
     def _index_exists(self, cursor: Any, index_name: str) -> bool:
         cursor.execute("SELECT to_regclass(%s) AS index_name", (f"tariff.{index_name}",))

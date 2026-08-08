@@ -131,7 +131,7 @@ st.markdown(
 @st.cache_resource
 def repository() -> TariffRepository:
     repo = TariffRepository(get_connection_pool())
-    repo.initialize()
+    repo.verify_runtime_schema()
     return repo
 
 
