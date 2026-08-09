@@ -84,7 +84,11 @@ class FakeEmbeddingService:
     endpoint_name = "databricks-gte-large-en"
     model_version = "gte-large-v1"
 
+    def __init__(self):
+        self.calls = []
+
     def embed_texts(self, texts):
+        self.calls.append(list(texts))
         return [[float(index)] * 1024 for index, _text in enumerate(texts)]
 
 
@@ -238,6 +242,31 @@ def test_ingestion_job_fetches_transforms_embeds_and_persists_one_live_notice():
     assert result == {"documents": 1, "snapshots": 1, "chunks": 1, "embeddings": 1}
     assert repository.embeddings[0].chunk_id == 11
     assert repository.embeddings[0].model_version == "gte-large-v1"
+
+
+def test_ingestion_job_paces_embedding_batches_for_a_rate_limited_endpoint():
+    repository = FakeRepository()
+    embeddings = FakeEmbeddingService()
+    waits = []
+
+    result = run_ingestion(
+        repository=repository,
+        federal_register_client=FakeFederalRegisterClient(),
+        embedding_service=embeddings,
+        document_numbers=["2026-15975"],
+        transformer=lambda _spark, notice: transform_policy_notice(
+            notice, chunk_size=25, chunk_overlap=0
+        ),
+        spark=object(),
+        embedding_batch_size=1,
+        embedding_batch_delay_seconds=1.25,
+        wait=waits.append,
+    )
+
+    assert result["chunks"] > 1
+    assert all(len(batch) == 1 for batch in embeddings.calls)
+    assert waits == [1.25] * (result["chunks"] - 1)
+    assert result["embeddings"] == result["chunks"]
 
 
 def test_pinned_demonstration_notice_set_uses_the_native_source_to_vector_path():

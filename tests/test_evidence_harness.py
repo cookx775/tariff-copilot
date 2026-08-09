@@ -370,6 +370,19 @@ def test_packaging_rejects_oversized_files_and_env_files(tmp_path: Path):
         )
 
 
+def test_packaging_rejects_project_specific_env_files(tmp_path: Path):
+    (tmp_path / "README.md").write_text("safe\n")
+    (tmp_path / ".tariff-copilot-smoke.env").write_text("PGHOST=example.invalid\n")
+
+    with pytest.raises(SecretScanError) as error:
+        validate_submission_tree(
+            tmp_path,
+            policy=PackagePolicy(required_artifacts=("README.md",), require_seed_loader=False),
+        )
+
+    assert ".tariff-copilot-smoke.env" in str(error.value)
+
+
 def test_default_package_policy_requires_a_real_seed_loader(tmp_path: Path):
     (tmp_path / "README.md").write_text("safe\n")
     report = validate_submission_tree(

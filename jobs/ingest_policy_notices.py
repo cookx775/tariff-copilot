@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from collections.abc import MutableMapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -200,6 +201,9 @@ def run_ingestion(
     transformer: Callable[
         [Any, PolicyNotice], TransformedPolicyNotice
     ] = transform_policy_notice_with_spark,
+    embedding_batch_size: Optional[int] = None,
+    embedding_batch_delay_seconds: float = 0,
+    wait: Callable[[float], None] = time.sleep,
 ) -> dict[str, int]:
     """Fetch live policy evidence, transform it in Spark, then perform native PostgreSQL upserts."""
     totals = {"documents": 0, "snapshots": 0, "chunks": 0, "embeddings": 0}
@@ -221,7 +225,21 @@ def run_ingestion(
             raise RuntimeError(
                 "Persisted policy chunks did not match the Spark transformation output."
             )
-        vectors = embedding_service.embed_texts([chunk.chunk_text for chunk in stored_chunks])
+        chunk_texts = [chunk.chunk_text for chunk in stored_chunks]
+        batch_size = len(chunk_texts) or 1
+        if embedding_batch_size is not None:
+            batch_size = embedding_batch_size
+        if batch_size <= 0:
+            raise ValueError("Embedding batch size must be positive.")
+        if embedding_batch_delay_seconds < 0:
+            raise ValueError("Embedding batch delay must not be negative.")
+        vectors = []
+        for offset in range(0, len(chunk_texts), batch_size):
+            if offset and embedding_batch_delay_seconds:
+                wait(embedding_batch_delay_seconds)
+            vectors.extend(
+                embedding_service.embed_texts(chunk_texts[offset : offset + batch_size])
+            )
         records = [
             PolicyEmbeddingRecord(
                 chunk_id=chunk.chunk_id,
@@ -277,6 +295,8 @@ def parse_arguments(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--pg-user")
     parser.add_argument("--endpoint-name")
     parser.add_argument("--embedding-endpoint")
+    parser.add_argument("--embedding-batch-size", type=int, default=1)
+    parser.add_argument("--embedding-batch-delay-seconds", type=float, default=1.25)
     return parser.parse_args(argv)
 
 
@@ -313,6 +333,8 @@ def main(argv: Optional[list[str]] = None) -> None:
         result = run_ingestion(
             **dependencies,
             document_numbers=args.document_numbers or DEFAULT_DOCUMENT_NUMBERS,
+            embedding_batch_size=args.embedding_batch_size,
+            embedding_batch_delay_seconds=args.embedding_batch_delay_seconds,
         )
     print(json.dumps(result, sort_keys=True))
 
