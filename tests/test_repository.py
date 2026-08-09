@@ -337,6 +337,7 @@ def test_completed_outlook_lookup_requires_the_full_current_input_version_tuple(
     assert "NULLIF(BTRIM(COALESCE(impact_window_policy_citation, '')), '') IS NOT NULL" in query
     assert "legacy_evidence.hts_scope_codes = '[]'::jsonb" in query
     assert "legacy_evidence.classification_evidence = '[]'::jsonb" in query
+    assert "legacy_evidence.hts_scope_source_sha256 !~ '^[0-9a-fA-F]{64}$'" in query
     assert "ORDER BY created_at DESC, outlook_id DESC" in query
     assert "ORDER BY created_at DESC, reanalysis_sequence DESC" not in query
     assert params == (

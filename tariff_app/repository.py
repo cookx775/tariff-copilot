@@ -327,7 +327,7 @@ class TariffRepository:
                         OR NULLIF(BTRIM(COALESCE(legacy_evidence.hts_scope_canonical_url, '')), '') IS NULL
                         OR LOWER(BTRIM(COALESCE(legacy_evidence.hts_scope_canonical_url, ''))) = 'unavailable'
                         OR legacy_evidence.hts_scope_source_sha256 IS NULL
-                        OR legacy_evidence.hts_scope_source_sha256 !~ '^[0-9a-fA-F]{64}$'
+                        OR legacy_evidence.hts_scope_source_sha256 !~ '^[0-9a-fA-F]{{64}}$'
                         OR legacy_evidence.hts_scope_text IS NULL
                         OR NULLIF(BTRIM(COALESCE(legacy_evidence.hts_scope_text, '')), '') IS NULL
                         OR LOWER(BTRIM(COALESCE(legacy_evidence.hts_scope_text, ''))) = 'unavailable'
