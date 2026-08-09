@@ -206,6 +206,10 @@ def run_ingestion(
     wait: Callable[[float], None] = time.sleep,
 ) -> dict[str, int]:
     """Fetch live policy evidence, transform it in Spark, then perform native PostgreSQL upserts."""
+    if embedding_batch_size is not None and embedding_batch_size <= 0:
+        raise ValueError("Embedding batch size must be positive.")
+    if embedding_batch_delay_seconds < 0:
+        raise ValueError("Embedding batch delay must not be negative.")
     totals = {"documents": 0, "snapshots": 0, "chunks": 0, "embeddings": 0}
     featured = set(featured_document_numbers)
     for document_number in document_numbers:
@@ -229,10 +233,6 @@ def run_ingestion(
         batch_size = len(chunk_texts) or 1
         if embedding_batch_size is not None:
             batch_size = embedding_batch_size
-        if batch_size <= 0:
-            raise ValueError("Embedding batch size must be positive.")
-        if embedding_batch_delay_seconds < 0:
-            raise ValueError("Embedding batch delay must not be negative.")
         vectors = []
         for offset in range(0, len(chunk_texts), batch_size):
             if offset and embedding_batch_delay_seconds:

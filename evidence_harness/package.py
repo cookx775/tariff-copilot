@@ -153,9 +153,20 @@ def _has_seed_loader(root: Path) -> bool:
     return False
 
 
+def _is_environment_file(path: Path) -> bool:
+    name = path.name.lower()
+    return (
+        name == ".env"
+        or name == ".envrc"
+        or name.startswith(".env.")
+        or ".env." in name
+        or name.endswith(".env")
+    )
+
+
 def _scan_file(path: Path, root: Path, policy: PackagePolicy) -> tuple[bool, bool]:
     path.relative_to(root).as_posix()
-    if path.name == ".env" or path.name.startswith(".env.") or path.suffix.lower() == ".env":
+    if _is_environment_file(path):
         return True, True
     if path.suffix.lower() in {".pem", ".key", ".p12", ".pfx"}:
         return True, True

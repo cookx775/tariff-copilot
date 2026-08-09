@@ -204,6 +204,37 @@ def test_manifest_does_not_verify_placeholders_or_invalid_run_records(tmp_path: 
     )
 
 
+def test_manifest_requires_cited_section_301_semantic_result(tmp_path: Path):
+    run = tmp_path / "evidence" / "runs" / "semantic-retrieval.json"
+    run.parent.mkdir(parents=True)
+    run.write_text(
+        json.dumps(
+            {
+                "run_id": "semantic-1",
+                "kind": "semantic-section-301-retrieval",
+                "status": "success",
+                "started_at": "2026-08-09T01:31:18+00:00",
+                "completed_at": "2026-08-09T01:31:18+00:00",
+                "source": "deployed vector index",
+                "artifact": "evidence/runs/semantic-retrieval.json",
+                "query": "Which Section 301 duty applies?",
+                "section_301_result_rank": 5,
+            }
+        )
+    )
+    requirement = EvidenceRequirement(
+        key="unstructured_retrieval",
+        name="Semantic retrieval",
+        required_artifacts=("evidence/runs/semantic-retrieval.json",),
+        verification_steps=("Retain the cited passage.",),
+    )
+
+    entry = build_evidence_manifest(tmp_path, requirements=(requirement,))["requirements"][0]
+
+    assert entry["status"] == "missing"
+    assert "missing cited Section 301 result" in entry["invalid_artifacts"][0]
+
+
 def test_release_manifest_validates_run_url_screenshot_and_test_contents(tmp_path: Path):
     run = tmp_path / "evidence" / "runs" / "successful.json"
     run.parent.mkdir(parents=True)
@@ -381,6 +412,20 @@ def test_packaging_rejects_project_specific_env_files(tmp_path: Path):
         )
 
     assert ".tariff-copilot-smoke.env" in str(error.value)
+
+
+@pytest.mark.parametrize("filename", ("config.env.production", ".envrc"))
+def test_packaging_rejects_additional_environment_file_variants(tmp_path: Path, filename: str):
+    (tmp_path / "README.md").write_text("safe\n")
+    (tmp_path / filename).write_text("safe-looking placeholder\n")
+
+    with pytest.raises(SecretScanError) as error:
+        validate_submission_tree(
+            tmp_path,
+            policy=PackagePolicy(required_artifacts=("README.md",), require_seed_loader=False),
+        )
+
+    assert filename in str(error.value)
 
 
 def test_default_package_policy_requires_a_real_seed_loader(tmp_path: Path):

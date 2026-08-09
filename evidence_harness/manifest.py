@@ -192,8 +192,29 @@ def _validated_artifact(root: Path, artifact: str, match: str) -> str | None:
     if artifact.startswith("evidence/fixtures/"):
         errors = _fixture_errors(path)
         return f"{match} ({'; '.join(errors)})" if errors else None
-    if artifact.startswith("evidence/runs/") and not verify_run_file(path).ok:
-        return f"{match} (invalid run record)"
+    if artifact.startswith("evidence/runs/"):
+        if not verify_run_file(path).ok:
+            return f"{match} (invalid run record)"
+        if match == "evidence/runs/semantic-retrieval.json":
+            try:
+                record = json.loads(path.read_text())
+            except (OSError, json.JSONDecodeError):
+                return f"{match} (invalid run record)"
+            result = record.get("section_301_result", {})
+            required = (
+                "source_identifier",
+                "chunk_id",
+                "passage_excerpt",
+                "similarity",
+                "citation_url",
+            )
+            if (
+                not isinstance(result, dict)
+                or not all(result.get(field) is not None for field in required)
+                or result.get("contains_section_301") is not True
+                or "section 301" not in str(result.get("passage_excerpt", "")).lower()
+            ):
+                return f"{match} (missing cited Section 301 result)"
     return None
 
 

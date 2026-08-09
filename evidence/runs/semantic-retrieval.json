@@ -17,6 +17,16 @@
     "citation_url": "https://www.federalregister.gov/d/2018-20610"
   },
   "section_301_result_rank": 5,
+  "section_301_result": {
+    "rank": 5,
+    "source_identifier": "2018-20610",
+    "chunk_id": 15,
+    "passage_excerpt": "USTR and the Section 301 Committee have carefully reviewed the public comments and the testimony from the six-day public hearing. Based on this review process, the Trade Representative, at the direction of the President, has determined not to include certain tariff subheadings listed in the Annex to the July 17 notice, resulting in 5,745 full and partial tariff subheadings with an approximate annual trade value of $200 billion.",
+    "similarity": 0.04773,
+    "citation": "Federal Register 2018-20610 (chars 10028-11164)",
+    "citation_url": "https://www.federalregister.gov/d/2018-20610",
+    "contains_section_301": true
+  },
   "schema_checks": {
     "vector_dimension": 1024,
     "hnsw_cosine_index": true,

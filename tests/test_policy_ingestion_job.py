@@ -3,6 +3,8 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
+import pytest
+
 from evidence_harness.fixtures import fixture_contract
 from jobs.ingest_policy_notices import (
     FEATURED_DEMONSTRATION_DOCUMENT,
@@ -267,6 +269,32 @@ def test_ingestion_job_paces_embedding_batches_for_a_rate_limited_endpoint():
     assert all(len(batch) == 1 for batch in embeddings.calls)
     assert waits == [1.25] * (result["chunks"] - 1)
     assert result["embeddings"] == result["chunks"]
+
+
+@pytest.mark.parametrize(
+    ("batch_size", "delay", "message"),
+    ((0, 0, "batch size"), (1, -0.01, "delay")),
+)
+def test_ingestion_rejects_invalid_pacing_before_fetch_or_persistence(
+    batch_size, delay, message
+):
+    repository = FakeRepository()
+    client = NoLiveFederalRegisterClient()
+
+    with pytest.raises(ValueError, match=message):
+        run_ingestion(
+            repository=repository,
+            federal_register_client=client,
+            embedding_service=FakeEmbeddingService(),
+            document_numbers=["2026-15975"],
+            transformer=lambda _spark, notice: transform_policy_notice(notice),
+            spark=object(),
+            embedding_batch_size=batch_size,
+            embedding_batch_delay_seconds=delay,
+        )
+
+    assert client.calls == []
+    assert repository.notices == []
 
 
 def test_pinned_demonstration_notice_set_uses_the_native_source_to_vector_path():
