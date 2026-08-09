@@ -1,12 +1,12 @@
 Tariff Copilot full verification
-Run at: 2026-08-09T01:44:21+00:00
-Clean source baseline: 9dd83a4
+Run at: 2026-08-09T01:57:57+00:00
+Clean source baseline: 1cf9e3e
 
 Command: .venv/bin/pytest -q
-Result: 142 passed in 1.09s
+Result: 142 passed in 1.11s
 Expected environment warnings: 3 (local LibreSSL/Python 3.9 dependency warnings)
 
-Command: .venv/bin/ruff check jobs/ingest_policy_notices.py evidence_harness/package.py tests/test_policy_ingestion_job.py tests/test_evidence_harness.py
+Command: .venv/bin/ruff check tariff_app/repository.py tests/test_repository.py jobs/ingest_policy_notices.py evidence_harness/package.py tests/test_policy_ingestion_job.py tests/test_evidence_harness.py
 Result: All checks passed
 
 Command: git diff --check
