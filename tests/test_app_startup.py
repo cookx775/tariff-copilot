@@ -36,3 +36,27 @@ def test_deployed_runtime_validates_schema_without_applying_owner_only_migration
 
     assert "repo.verify_runtime_schema()" in app_source
     assert "repo.initialize()" not in app_source
+
+
+def test_navigation_defers_url_sync_until_the_destination_run():
+    from tariff_app.navigation import request_navigation, resolve_route
+
+    class QueryParams(dict):
+        def __init__(self):
+            super().__init__({"view": "outlook", "notice_id": "1", "outlook_id": "1"})
+            self.replacements = []
+
+        def from_dict(self, params):
+            replacement = dict(params)
+            self.replacements.append(replacement)
+            self.clear()
+            self.update(replacement)
+
+    session_state = {}
+    query_params = QueryParams()
+    request_navigation(session_state, "review", review_id=1)
+
+    assert query_params.replacements == []
+    route = resolve_route(session_state, query_params)
+    assert route == {"view": "review", "review_id": "1"}
+    assert query_params.replacements == [route]

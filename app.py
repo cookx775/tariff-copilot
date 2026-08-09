@@ -3,7 +3,7 @@ from __future__ import annotations
 import html
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import streamlit as st
 
@@ -18,6 +18,7 @@ from tariff_app.db import DatabaseConfigurationError, get_connection_pool
 from tariff_app.embeddings import EmbeddingService
 from tariff_app.identity import IdentityError, actor_email, forwarded_email
 from tariff_app.models import PolicyNoticeSnapshot
+from tariff_app.navigation import request_navigation, resolve_route
 from tariff_app.outlook import ImpactOutlookSnapshot
 from tariff_app.repository import RecordNotFound, TariffRepository
 from tariff_app.sourcing_review import RetryableReviewWriteFailure
@@ -143,10 +144,7 @@ def forwarded_headers() -> dict[str, str]:
 
 
 def navigate(view: str, **identifiers: int) -> None:
-    st.query_params.clear()
-    st.query_params["view"] = view
-    for name, value in identifiers.items():
-        st.query_params[name] = str(value)
+    request_navigation(st.session_state, view, **identifiers)
     st.rerun()
 
 
@@ -764,8 +762,8 @@ def render_sourcing_review_detail(workflow: TariffWorkflow, review_id: int) -> N
         )
 
 
-def _query_int(name: str) -> int | None:
-    raw_value = st.query_params.get(name)
+def _route_int(route: Mapping[str, str], name: str) -> int | None:
+    raw_value = route.get(name)
     if raw_value is None:
         return None
     try:
@@ -815,8 +813,9 @@ def run_app() -> None:
         actor_email=actor,
         sourcing_review_store=SourcingReviewRepository(get_connection_pool()),
     )
-    legacy_review_id = _query_int("review_id")
-    view = st.query_params.get("view", "review" if legacy_review_id else "inbox")
+    route = resolve_route(st.session_state, st.query_params)
+    legacy_review_id = _route_int(route, "review_id")
+    view = route.get("view", "review" if legacy_review_id else "inbox")
     if view not in {"inbox", "outlook", "reviews", "review"}:
         view = "inbox"
     render_app_chrome(actor=actor, active_view=view)
@@ -826,15 +825,15 @@ def run_app() -> None:
             render_sourcing_reviews_index(workflow)
             return
         if view == "review":
-            review_id = _query_int("review_id") or legacy_review_id
+            review_id = _route_int(route, "review_id") or legacy_review_id
             if review_id is None:
                 st.error("The Sourcing Review link is invalid.")
                 return
             render_sourcing_review_detail(workflow, review_id)
             return
         if view == "outlook":
-            notice_id = _query_int("notice_id")
-            outlook_id = _query_int("outlook_id")
+            notice_id = _route_int(route, "notice_id")
+            outlook_id = _route_int(route, "outlook_id")
             if notice_id is None or outlook_id is None:
                 st.error("The Impact Outlook link is invalid.")
                 return
