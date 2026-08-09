@@ -86,8 +86,8 @@ misrepresented as successful work.
 ## Ticket 16 release verification
 
 The final cache-free application archive was built from `main` commit
-`1cf9e3ee54bf10b646d9f563721439fb94c9d09e` and deployed as
-`01f193966448101599a16a093e8bc3c1`. The deployment completed successfully, then the app was
+`020101e1259ff89f5dad9b0f01e1b92059787b31` and deployed as
+`01f19398521b1c179118f4d612d6901c`. The deployment completed successfully, then the app was
 explicitly stopped and started before final verification. Compute returned to `ACTIVE`, the app
 returned to `RUNNING`, and an initial reload warmed the Lakebase connection.
 
@@ -97,7 +97,7 @@ validation, two product lines, evidence, and three actions; the exact supplier-c
 the Sourcing Reviews index; and SR-1 after a full browser reload. The rehearsal stopped short of a
 second confirmed write because SR-1 already supplies the required durable-write evidence.
 
-Release checks were 142 passing tests, changed-file Ruff clean, `git diff --check` clean, all 18
+Release checks were 147 passing tests, changed-file Ruff clean, `git diff --check` clean, all 18
 deployed Lakebase schema checks passing, and a 5/5 evidence manifest. The live ingestion run
 persisted one Federal Register document and snapshot plus 34 chunks and embeddings; the seeded Git
 Spark run persisted two documents and snapshots plus 53 chunks and embeddings.
