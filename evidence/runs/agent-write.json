@@ -1,0 +1,33 @@
+{
+  "run_id": "agent-runs-3-and-6",
+  "kind": "agent-retrieval-and-write-smoke",
+  "status": "success",
+  "started_at": "2026-08-08T19:01:55.464328+00:00",
+  "completed_at": "2026-08-09T00:49:17.872338+00:00",
+  "source": "Lakebase append-only Agent Runs and confirmed Sourcing Review",
+  "artifact": "evidence/runs/agent-write.json",
+  "analysis_run": {
+    "agent_run_id": 3,
+    "operation": "analyze_policy_notice",
+    "processing_state": "Complete",
+    "outcome": "Impact Outlook Snapshot published",
+    "outlook_id": 1,
+    "bounded_tool_events": [
+      "retrieve_policy_notice_snapshot:v1",
+      "find_exposure_candidates:v2",
+      "retrieve_demonstration_scenario_context:v1"
+    ]
+  },
+  "write_run": {
+    "agent_run_id": 6,
+    "operation": "open_sourcing_review",
+    "processing_state": "Complete",
+    "outcome": "Sourcing Review opened",
+    "confirmation_action": "sourcing_review_confirmation",
+    "sourcing_review_id": 1,
+    "source_outlook_id": 1,
+    "status": "Open",
+    "scope_link_count": 3
+  },
+  "persistence_check": "SR-1 remained readable from its direct route and the Sourcing Reviews index after a full browser refresh."
+}

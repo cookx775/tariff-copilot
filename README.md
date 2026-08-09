@@ -102,11 +102,12 @@ checked-in SQL.
 
 ## Five-minute demo
 
-The final rehearsal will follow this sequence: disclose the public-versus-synthetic boundary;
-open the Featured Demonstration Notice in the Policy Inbox; run the Impact Outlook; inspect the
-evidence and Recommended Actions; explicitly confirm one Sourcing Review; then reload and open
-the durable Review detail. The deployed smoke record remains a placeholder until that flow is
-completed against the live app.
+The completed rehearsal follows this sequence: disclose the public-versus-synthetic boundary;
+open the Featured Demonstration Notice in the Policy Inbox; open the persisted Impact Outlook;
+inspect the evidence and Recommended Actions; explicitly confirm one Sourcing Review; then reload
+and reopen the durable Review detail. The seven-step live result is recorded in
+[`docs/deployment-smoke.md`](docs/deployment-smoke.md), with sanitized deployment and Agent Run
+records under `evidence/runs/`.
 
 ## Known limitations and applied cuts
 

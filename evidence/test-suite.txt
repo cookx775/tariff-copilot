@@ -1,0 +1,13 @@
+Tariff Copilot full verification
+Run at: 2026-08-09T01:08:42+00:00
+Source baseline: b5e5d16
+
+Command: .venv/bin/pytest -q
+Result: 139 passed in 1.03s
+Expected environment warnings: 3 (local LibreSSL/Python 3.9 dependency warnings)
+
+Command: .venv/bin/ruff check .
+Result: All checks passed
+
+Command: git diff --check
+Result: passed

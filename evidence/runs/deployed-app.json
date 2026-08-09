@@ -1,0 +1,25 @@
+{
+  "run_id": "01f1938d5d38111faba65b34383d2239",
+  "kind": "deployed-app-smoke",
+  "status": "success",
+  "started_at": "2026-08-09T00:57:58+00:00",
+  "completed_at": "2026-08-09T01:08:42+00:00",
+  "source": "Databricks Apps tariff-copilot snapshot deployment",
+  "artifact": "docs/deployment-smoke.md",
+  "deployment_result": "SUCCEEDED",
+  "app_status": "RUNNING",
+  "checks": [
+    "Persistent illustrative-scenario disclosure",
+    "Featured historical replay separated from current notices",
+    "Persisted IO-1 executive brief, metrics, evidence, history, and actions",
+    "Exact Sourcing Review confirmation payload",
+    "Durable SR-1 detail",
+    "Sourcing Reviews index reopen",
+    "Full refresh retained the review route and record"
+  ],
+  "persisted_records": {
+    "impact_outlook_id": 1,
+    "sourcing_review_id": 1,
+    "scope_link_count": 3
+  }
+}

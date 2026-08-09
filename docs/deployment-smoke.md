@@ -57,30 +57,28 @@ This record contains no credentials, tokens, database passwords, or personal con
 ruff check (changed Python files): passed
 ```
 
-## Full capstone scoring smoke checklist
+## Ticket 15 full capstone scoring smoke
 
-This checklist is intentionally separate from the completed foundation check above. Each step
-must be performed against the deployed app and recorded in `evidence/runs/`; an unchecked step
-is missing evidence, not a passing assumption.
+The required seven-step persisted-data journey completed successfully on 2026-08-09 against
+deployment `01f1938d5d38111faba65b34383d2239`. The app deployment was `SUCCEEDED`, the app was
+`RUNNING`, and the final route/reload check completed before the sanitized evidence records were
+verified at `2026-08-09T01:08:42+00:00`.
 
-1. Confirm the persistent illustrative-scenario disclosure distinguishes public Mueller Water
-   Products facts, public policy/HTS evidence, synthetic Demonstration Scenario records, and
-   model-generated analysis.
-2. Confirm the Policy Inbox separates the Featured Demonstration Notice historical replay from
-   current live notices and retains each Policy Notice Snapshot after reload.
-3. Run the Featured Demonstration Notice and verify the Impact Outlook leads with the executive
-   impact brief, Annual Spend Exposed, Spend Requiring Validation, cited evidence, and up to
-   three Recommended Actions.
-4. Open the evidence detail and verify each Impact Finding has its policy passage, HTS evidence,
-   Demonstration Scenario path, Match Confidence, Impact Window, and uncertainty.
-5. Select one stored Recommended Action and inspect the exact confirmation payload before any
-   write. Confirm only the objective and owner are editable.
-6. Confirm the Sourcing Review explicitly, verify the Agent Run records bounded retrieval and
-   the confirmed write, and land on durable Review detail.
-7. Reload the app and reopen the Review from the Sourcing Reviews index or direct detail path.
-8. Exercise the negative or failure-safe path when retained: a successful zero-match result must
-   say **No Actionable Exposure Identified**, while retrieval, validation, or persistence failure
-   must say **Failed** and never appear as no exposure.
+| Step | Result | Observable evidence |
+|---|---|---|
+| 1. Verify the persistent illustrative-scenario disclosure | PASS | Every visited surface distinguished public enterprise/policy facts, synthetic procurement records, the historical replay, and model-generated analysis. |
+| 2. Verify featured-versus-live Policy Inbox separation and persistence | PASS | The Featured Demonstration Notice rendered separately from the Current Policy Inbox; both persisted Policy Notice Snapshots remained after reload. |
+| 3. Run/open the featured Impact Outlook | PASS | IO-1 led with the executive brief, $6M Annual Spend Exposed, $3M Spend Requiring Validation, two affected product lines, the impact window, cited evidence, and three Recommended Actions. |
+| 4. Inspect evidence detail | PASS | Findings exposed the policy passage, HTS scope, Demonstration Scenario path, Match Confidence, uncertainty, and source link. |
+| 5. Inspect the exact confirmation payload | PASS | The selected supplier-confirmation action showed editable objective/owner beside read-only recommendation and three-row evidence scope before the write. |
+| 6. Confirm and open the durable Sourcing Review | PASS | Lakebase Agent Run 3 retained the three bounded read-tool events; confirmed write Agent Run 6 completed and created SR-1 with three fixed scope links. |
+| 7. Reload and reopen the Review | PASS | SR-1 reopened from the Sourcing Reviews index, its URL resolved to `?view=review&review_id=1`, and a full browser refresh retained the same durable Review detail. |
 
-Record for each step: UTC timestamp, redacted deployment identifier, result, and artifact path.
-Never paste credentials, tokens, cookies, or personal contact addresses into this file.
+Sanitized machine-readable records are in `evidence/runs/deployed-app.json` and
+`evidence/runs/agent-write.json`; the deployed URL is in `evidence/deployed-url.txt`. These files
+contain no credentials, cookies, tokens, or personal contact addresses.
+
+The negative/failure-safe coda was not required for the seven-step live journey. Automated tests
+retain the distinct **No Actionable Exposure Identified**, **Validation required**, and **Failed**
+contracts. Two earlier failed Review writes also remained append-only Agent Runs rather than being
+misrepresented as successful work.

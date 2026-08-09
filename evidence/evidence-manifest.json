@@ -20,40 +20,9 @@
     },
     {
       "missing_artifacts": [
-        "evidence/deployed-url.txt",
-        "evidence/runs/deployed-app.json"
-      ],
-      "requirement": "deployed_frontend"
-    },
-    {
-      "missing_artifacts": [
-        "evidence/runs/agent-write.json"
-      ],
-      "requirement": "agent_retrieval_and_write"
-    },
-    {
-      "missing_artifacts": [
         "evidence/screenshots/"
       ],
       "requirement": "release:screenshots"
-    },
-    {
-      "missing_artifacts": [
-        "evidence/runs/*.json"
-      ],
-      "requirement": "release:run_identifiers"
-    },
-    {
-      "missing_artifacts": [
-        "evidence/deployed-url.txt"
-      ],
-      "requirement": "release:deployed_url"
-    },
-    {
-      "missing_artifacts": [
-        "evidence/test-suite.txt"
-      ],
-      "requirement": "release:test_evidence"
     }
   ],
   "release_evidence": [
@@ -69,33 +38,34 @@
     },
     {
       "expected_artifact": "evidence/runs/*.json",
-      "found_artifacts": [],
+      "found_artifacts": [
+        "evidence/runs/agent-write.json",
+        "evidence/runs/deployed-app.json"
+      ],
       "invalid_artifacts": [],
       "key": "run_identifiers",
-      "missing_artifacts": [
-        "evidence/runs/*.json"
-      ],
-      "status": "missing"
+      "missing_artifacts": [],
+      "status": "present"
     },
     {
       "expected_artifact": "evidence/deployed-url.txt",
-      "found_artifacts": [],
-      "invalid_artifacts": [],
-      "key": "deployed_url",
-      "missing_artifacts": [
+      "found_artifacts": [
         "evidence/deployed-url.txt"
       ],
-      "status": "missing"
+      "invalid_artifacts": [],
+      "key": "deployed_url",
+      "missing_artifacts": [],
+      "status": "present"
     },
     {
       "expected_artifact": "evidence/test-suite.txt",
-      "found_artifacts": [],
-      "invalid_artifacts": [],
-      "key": "test_evidence",
-      "missing_artifacts": [
+      "found_artifacts": [
         "evidence/test-suite.txt"
       ],
-      "status": "missing"
+      "invalid_artifacts": [],
+      "key": "test_evidence",
+      "missing_artifacts": [],
+      "status": "present"
     }
   ],
   "requirement_count": 5,
@@ -169,17 +139,16 @@
       ]
     },
     {
-      "evidence_claim": "Not verified; missing or invalid artifacts are listed explicitly.",
+      "evidence_claim": "Verified only when every required artifact is present.",
       "found_artifacts": [
         "app.py",
-        "docs/deployment-smoke.md"
-      ],
-      "invalid_artifacts": [],
-      "key": "deployed_frontend",
-      "missing_artifacts": [
+        "docs/deployment-smoke.md",
         "evidence/deployed-url.txt",
         "evidence/runs/deployed-app.json"
       ],
+      "invalid_artifacts": [],
+      "key": "deployed_frontend",
+      "missing_artifacts": [],
       "name": "Interactive Databricks App frontend",
       "required_artifacts": [
         "app.py",
@@ -187,24 +156,23 @@
         "evidence/deployed-url.txt",
         "evidence/runs/deployed-app.json"
       ],
-      "status": "missing",
+      "status": "verified",
       "verification_steps": [
         "Run the deployment smoke checklist against the deployed app.",
         "Verify Policy Inbox, Impact Outlook, and durable Sourcing Review behavior after reload."
       ]
     },
     {
-      "evidence_claim": "Not verified; missing or invalid artifacts are listed explicitly.",
+      "evidence_claim": "Verified only when every required artifact is present.",
       "found_artifacts": [
+        "evidence/runs/agent-write.json",
         "sql/schema.sql",
         "tariff_app/agent.py",
         "tariff_app/workflow.py"
       ],
       "invalid_artifacts": [],
       "key": "agent_retrieval_and_write",
-      "missing_artifacts": [
-        "evidence/runs/agent-write.json"
-      ],
+      "missing_artifacts": [],
       "name": "AI agent that retrieves evidence and performs a durable write",
       "required_artifacts": [
         "tariff_app/agent.py",
@@ -212,13 +180,13 @@
         "evidence/runs/agent-write.json",
         "sql/schema.sql"
       ],
-      "status": "missing",
+      "status": "verified",
       "verification_steps": [
         "Verify the Agent Run contains bounded retrieval events and an explicitly confirmed write.",
         "Reload the app and confirm the Sourcing Review remains durable in Lakebase."
       ]
     }
   ],
-  "verified_requirement_count": 0,
+  "verified_requirement_count": 2,
   "version": 1
 }
