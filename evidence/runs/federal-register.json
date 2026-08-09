@@ -1,0 +1,20 @@
+{
+  "run_id": "953591369726285",
+  "kind": "live-federal-register-spark-ingest",
+  "status": "success",
+  "started_at": "2026-08-09T01:40:32.258000+00:00",
+  "completed_at": "2026-08-09T01:41:57.274000+00:00",
+  "source": "Federal Register API and raw text endpoint",
+  "artifact": "evidence/runs/federal-register.json",
+  "source_identifier": "2026-15975",
+  "source_provenance": "Federal Register API and raw text endpoint",
+  "git_branch": "main",
+  "git_commit": "9dd83a4f2fecccefc31b07452ee5b6d2f684443d",
+  "task_run_id": "390295571290112",
+  "output": {
+    "documents": 1,
+    "snapshots": 1,
+    "chunks": 34,
+    "embeddings": 34
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "ownership_access": true,
+  "captured_at": "2026-08-09T01:31:18+00:00",
+  "source": "Read-only Lakebase privilege and pg_indexes checks",
+  "schema_usage": true,
+  "table_read": true,
+  "table_write": true,
+  "vector_hnsw_cosine_index": true
+}

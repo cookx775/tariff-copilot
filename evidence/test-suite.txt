@@ -1,13 +1,17 @@
 Tariff Copilot full verification
-Run at: 2026-08-09T01:08:42+00:00
-Source baseline: b5e5d16
+Run at: 2026-08-09T01:44:21+00:00
+Clean source baseline: 9dd83a4
 
 Command: .venv/bin/pytest -q
-Result: 139 passed in 1.03s
+Result: 142 passed in 1.09s
 Expected environment warnings: 3 (local LibreSSL/Python 3.9 dependency warnings)
 
-Command: .venv/bin/ruff check .
+Command: .venv/bin/ruff check jobs/ingest_policy_notices.py evidence_harness/package.py tests/test_policy_ingestion_job.py tests/test_evidence_harness.py
 Result: All checks passed
 
 Command: git diff --check
 Result: passed
+
+Known baseline outside ticket 16: full-tree Ruff reports three import-order/collections.abc
+findings in planning/roadmap/roadmap.py and tests/test_roadmap.py. Those files were not changed or
+included in this release work.

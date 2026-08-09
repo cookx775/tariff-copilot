@@ -1,0 +1,27 @@
+{
+  "run_id": "release-semantic-retrieval-2026-08-09",
+  "kind": "semantic-section-301-retrieval",
+  "status": "success",
+  "started_at": "2026-08-09T01:31:18+00:00",
+  "completed_at": "2026-08-09T01:31:18+00:00",
+  "source": "Deployed Lakebase pgvector index and databricks-qwen3-embedding-0-6b",
+  "artifact": "evidence/runs/semantic-retrieval.json",
+  "query": "Which Section 301 duty applies to covered valve imports?",
+  "result_count": 5,
+  "top_result": {
+    "notice_id": 1,
+    "source_identifier": "2018-20610",
+    "chunk_id": 4,
+    "similarity": 0.062634,
+    "contains_hts_scope": true,
+    "citation_url": "https://www.federalregister.gov/d/2018-20610"
+  },
+  "section_301_result_rank": 5,
+  "schema_checks": {
+    "vector_dimension": 1024,
+    "hnsw_cosine_index": true,
+    "schema_usage": true,
+    "table_read": true,
+    "table_write": true
+  }
+}

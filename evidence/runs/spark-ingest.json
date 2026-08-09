@@ -1,0 +1,17 @@
+{
+  "run_id": "554065106618462",
+  "kind": "git-sourced-spark-ingest",
+  "status": "success",
+  "started_at": "2026-08-08T14:25:13.872000+00:00",
+  "completed_at": "2026-08-08T14:26:18.354000+00:00",
+  "source": "Databricks serverless Spark task sourced from cookx775/tariff-copilot main",
+  "artifact": "evidence/runs/spark-ingest.json",
+  "git_commit": "795d0bc14f3253b8c05d619d728d744dccc60c12",
+  "task_key": "seed_demonstration_notices",
+  "output": {
+    "documents": 2,
+    "snapshots": 2,
+    "chunks": 53,
+    "embeddings": 53
+  }
+}

@@ -71,8 +71,9 @@ pytest
 ```
 
 The evidence harness tests should pass from a clean checkout. The full suite is the release gate;
-the checked-in manifest and package checks must still report missing evidence until live run
-identifiers, screenshots, a deployed URL, and the final app workflow exist.
+the release expectation is **142 passed**, followed by Ruff on the release-touched Python files
+and `git diff --check` without errors. The checked-in `evidence/test-suite.txt` records the exact
+clean-source run.
 
 ## Five-requirement evidence map
 
@@ -84,8 +85,8 @@ python -m evidence_harness manifest --output evidence/evidence-manifest.json
 
 It maps each course requirement to expected artifacts and verification steps. A requirement is
 marked `verified` only when every required artifact is present; otherwise the manifest records
-the missing artifacts explicitly. The current branch intentionally contains pending placeholders
-for work owned by the remaining implementation tickets.
+the missing artifacts explicitly. The release manifest records all five requirements as verified
+and includes sanitized run identifiers, screenshots, the deployed URL, and test evidence.
 
 | Requirement | Evidence contract |
 |---|---|
@@ -114,8 +115,9 @@ records under `evidence/runs/`.
 The Demonstration Scenario is synthetic procurement data anchored to public Mueller Water
 Products facts. Annual Spend Exposed is not an expected cost increase or legal determination.
 The capstone does not claim supplier pass-through, exact COGS, or automatic operational action.
-Contingency cuts are recorded in the roadmap and must not remove Spark ingestion, live API
-evidence, semantic retrieval, the deployed app, agent retrieval, or the confirmed durable write.
+The negative/failure-safe coda was cut from the five-minute live rehearsal, not from the tested
+implementation. No mandatory course requirement was cut: Spark ingestion, live API evidence,
+semantic retrieval, the deployed app, agent retrieval, and the confirmed durable write remain.
 
 ## Submission package
 

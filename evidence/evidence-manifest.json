@@ -1,46 +1,24 @@
 {
-  "missing_evidence": [
-    {
-      "missing_artifacts": [
-        "evidence/runs/spark-ingest.json"
-      ],
-      "requirement": "spark_pipeline"
-    },
-    {
-      "missing_artifacts": [
-        "evidence/runs/federal-register.json"
-      ],
-      "requirement": "third_party_api"
-    },
-    {
-      "missing_artifacts": [
-        "evidence/runs/semantic-retrieval.json"
-      ],
-      "requirement": "unstructured_retrieval"
-    },
-    {
-      "missing_artifacts": [
-        "evidence/screenshots/"
-      ],
-      "requirement": "release:screenshots"
-    }
-  ],
+  "missing_evidence": [],
   "release_evidence": [
     {
       "expected_artifact": "evidence/screenshots/",
-      "found_artifacts": [],
+      "found_artifacts": [
+        "evidence/screenshots"
+      ],
       "invalid_artifacts": [],
       "key": "screenshots",
-      "missing_artifacts": [
-        "evidence/screenshots/"
-      ],
-      "status": "missing"
+      "missing_artifacts": [],
+      "status": "present"
     },
     {
       "expected_artifact": "evidence/runs/*.json",
       "found_artifacts": [
         "evidence/runs/agent-write.json",
-        "evidence/runs/deployed-app.json"
+        "evidence/runs/deployed-app.json",
+        "evidence/runs/federal-register.json",
+        "evidence/runs/semantic-retrieval.json",
+        "evidence/runs/spark-ingest.json"
       ],
       "invalid_artifacts": [],
       "key": "run_identifiers",
@@ -71,60 +49,57 @@
   "requirement_count": 5,
   "requirements": [
     {
-      "evidence_claim": "Not verified; missing or invalid artifacts are listed explicitly.",
+      "evidence_claim": "Verified only when every required artifact is present.",
       "found_artifacts": [
+        "evidence/runs/spark-ingest.json",
         "jobs/__init__.py",
         "jobs/ingest_policy_notices.py"
       ],
       "invalid_artifacts": [],
       "key": "spark_pipeline",
-      "missing_artifacts": [
-        "evidence/runs/spark-ingest.json"
-      ],
+      "missing_artifacts": [],
       "name": "Data pipeline in Spark",
       "required_artifacts": [
         "jobs/*.py",
         "evidence/runs/spark-ingest.json"
       ],
-      "status": "missing",
+      "status": "verified",
       "verification_steps": [
         "Run the Git-sourced Spark task and retain its successful run record.",
         "Confirm raw, normalized, and chunked notice outputs are represented in the run evidence."
       ]
     },
     {
-      "evidence_claim": "Not verified; missing or invalid artifacts are listed explicitly.",
+      "evidence_claim": "Verified only when every required artifact is present.",
       "found_artifacts": [
-        "evidence/fixtures/featured_policy_notice_snapshot.json"
+        "evidence/fixtures/featured_policy_notice_snapshot.json",
+        "evidence/runs/federal-register.json"
       ],
       "invalid_artifacts": [],
       "key": "third_party_api",
-      "missing_artifacts": [
-        "evidence/runs/federal-register.json"
-      ],
+      "missing_artifacts": [],
       "name": "At least one third-party API",
       "required_artifacts": [
         "evidence/fixtures/featured_policy_notice_snapshot.json",
         "evidence/runs/federal-register.json"
       ],
-      "status": "missing",
+      "status": "verified",
       "verification_steps": [
         "Verify the run record names the live Federal Register source and source identifier.",
         "Verify the pinned snapshot retains URL, retrieval time, raw payload, and fingerprint."
       ]
     },
     {
-      "evidence_claim": "Not verified; missing or invalid artifacts are listed explicitly.",
+      "evidence_claim": "Verified only when every required artifact is present.",
       "found_artifacts": [
         "evidence/fixtures/featured_policy_notice_snapshot.json",
+        "evidence/runs/semantic-retrieval.json",
         "sql/schema.sql",
         "tariff_app/retrieval.py"
       ],
       "invalid_artifacts": [],
       "key": "unstructured_retrieval",
-      "missing_artifacts": [
-        "evidence/runs/semantic-retrieval.json"
-      ],
+      "missing_artifacts": [],
       "name": "Processing of unstructured data and semantic retrieval",
       "required_artifacts": [
         "tariff_app/retrieval.py",
@@ -132,7 +107,7 @@
         "evidence/runs/semantic-retrieval.json",
         "sql/schema.sql"
       ],
-      "status": "missing",
+      "status": "verified",
       "verification_steps": [
         "Run the semantic query and retain the cited Section 301 passage in its evidence record.",
         "Verify the schema report passes vector(1024), HNSW, and cosine-operator checks."
@@ -187,6 +162,6 @@
       ]
     }
   ],
-  "verified_requirement_count": 2,
+  "verified_requirement_count": 5,
   "version": 1
 }
