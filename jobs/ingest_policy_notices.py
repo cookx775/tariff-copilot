@@ -83,6 +83,18 @@ def transform_policy_notice_with_spark(
             T.StructField("chunks", T.ArrayType(chunk_schema), nullable=False),
         ]
     )
+    input_schema = T.StructType(
+        [
+            T.StructField("source_identifier", T.StringType(), nullable=False),
+            T.StructField("title", T.StringType(), nullable=False),
+            T.StructField("agency", T.StringType(), nullable=False),
+            T.StructField("canonical_url", T.StringType(), nullable=False),
+            T.StructField("publication_date", T.DateType(), nullable=False),
+            T.StructField("effective_date", T.DateType(), nullable=True),
+            T.StructField("retrieved_at", T.TimestampType(), nullable=False),
+            T.StructField("raw_content", T.StringType(), nullable=False),
+        ]
+    )
 
     def parse_source(
         source_identifier: str,
@@ -141,7 +153,8 @@ def transform_policy_notice_with_spark(
                     "retrieved_at": notice.retrieved_at,
                     "raw_content": notice.raw_content,
                 }
-            ]
+            ],
+            schema=input_schema,
         )
         .select(
             parsed(

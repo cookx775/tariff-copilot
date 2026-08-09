@@ -1,4 +1,7 @@
+import sys
+from dataclasses import replace
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from evidence_harness.fixtures import fixture_contract
 from jobs.ingest_policy_notices import (
@@ -9,6 +12,7 @@ from jobs.ingest_policy_notices import (
     run_demonstration_notice_ingestion,
     run_ingestion,
     transform_policy_notice,
+    transform_policy_notice_with_spark,
 )
 from tariff_app.models import PolicyNoticeChunkRecord, PolicyNoticeSnapshot
 from tariff_app.policy import build_policy_notice
@@ -128,6 +132,95 @@ def test_policy_transformer_produces_citable_chunk_output_for_spark_to_persist()
 
     assert transformed.notice.hts_codes == ("9903.88.15",)
     assert transformed.chunks[0].citation("2026-15975").startswith("Federal Register 2026-15975")
+
+
+def test_spark_transform_accepts_a_live_notice_without_an_effective_date(monkeypatch):
+    class SparkType:
+        pass
+
+    class StructField:
+        def __init__(self, name, data_type, nullable):
+            self.name = name
+            self.dataType = data_type
+            self.nullable = nullable
+
+    class StructType:
+        def __init__(self, fields):
+            self.fields = fields
+
+    class AliasedColumn:
+        def alias(self, _name):
+            return self
+
+    types = SimpleNamespace(
+        StructType=StructType,
+        StructField=StructField,
+        IntegerType=SparkType,
+        StringType=SparkType,
+        ArrayType=lambda element_type: ("array", element_type),
+        DateType=SparkType,
+        TimestampType=SparkType,
+    )
+    functions = SimpleNamespace(
+        col=lambda name: name,
+        udf=lambda _function, _schema: lambda *_columns: AliasedColumn(),
+    )
+    monkeypatch.setitem(sys.modules, "pyspark", SimpleNamespace(sql=SimpleNamespace()))
+    monkeypatch.setitem(sys.modules, "pyspark.sql", SimpleNamespace(functions=functions, types=types))
+
+    class FakeFrame:
+        def select(self, *_columns):
+            return self
+
+        def first(self):
+            return {
+                "parsed": {
+                    "normalized_text": "Section 301 scope",
+                    "hts_codes": ["9903.88.15"],
+                    "chunks": [
+                        {
+                            "chunk_index": 0,
+                            "section_title": None,
+                            "chunk_text": "Section 301 scope",
+                            "start_offset": 0,
+                            "end_offset": 17,
+                            "hts_codes": ["9903.88.15"],
+                        }
+                    ],
+                }
+            }
+
+    class FakeSpark:
+        input_schema = None
+
+        def createDataFrame(self, _rows, schema=None):
+            self.input_schema = schema
+            if schema is None:
+                raise AssertionError("Live notice rows require an explicit Spark input schema.")
+            return FakeFrame()
+
+    spark = FakeSpark()
+
+    transformed = transform_policy_notice_with_spark(
+        spark,
+        replace(source_notice(), effective_date=None),
+    )
+
+    assert [field.name for field in spark.input_schema.fields] == [
+        "source_identifier",
+        "title",
+        "agency",
+        "canonical_url",
+        "publication_date",
+        "effective_date",
+        "retrieved_at",
+        "raw_content",
+    ]
+    effective_date = next(
+        field for field in spark.input_schema.fields if field.name == "effective_date"
+    )
+    assert effective_date.nullable is True
+    assert transformed.notice.effective_date is None
 
 
 def test_ingestion_job_fetches_transforms_embeds_and_persists_one_live_notice():
